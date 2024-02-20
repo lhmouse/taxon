@@ -8,14 +8,15 @@ So, why yet another format?
 
 All formats above are binary formats. They have their own data type extensions
 to JSON. They are claimed to be 'more efficient' in some way than JSON. They
-provide libraries that are fast enough and easy to use.
+provide libraries that are easy to use.
 
 Until, they do not solve our problems.
 
-We still work with a lot of legacy tools. There is native JSON support in
-JavaScript and MySQL. There are a lot of third-party libraries in varieties of
-languages. We sometimes work with command-line tools, copying and pasting JSON
-results from consoles, into some random IM app, or via SSH to another machine.
+We are still working with a lot of legacy tools. There is native JSON support
+in JavaScript and MySQL. There are a lot of third-party libraries in varieties
+of languages. We sometimes work with command-line tools, copying and pasting
+JSON results from consoles, into some random instant message app, or via SSH
+to another computer.
 
 The human brain is such a large piece of cr@p that it refuses to read binary
 data.
@@ -27,7 +28,7 @@ a no-go.
 
 ---
 
-Hence TAXON. The data types are defined as follows:
+Hence TAXON. The data types and representations are defined as follows:
 
 |C++ Type                |Remarks                |Examples                  |
 |:-----------------------|:----------------------|:-------------------------|
