@@ -1,0 +1,11 @@
+Package: {_pkgname}
+Version: {_pkgversion}
+Architecture: {_pkgarch}
+Multi-Arch: same
+Priority: optional
+Section: interpreters
+Maintainer: LIU Hao <lh_mouse@126.com>
+Provides: libtaxon, libtaxon-dev
+Depends: libasteria, libasteria-dev
+Description: Type Annotation eXtension for JSON
+Homepage: https://github.com/lhmouse/taxon

@@ -1,0 +1,10 @@
+.*
+*.rej
+*.orig
+*.save*
+*.swp
+*.deb
+*.log
+/build_*
+/profiling/*
+/asteria
