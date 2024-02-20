@@ -48,8 +48,8 @@ Hence TAXON. The data types and representations are defined as follows:
 1. Integers, non-finite floating-point numbers and binary data must be encoded
    as strings, according to the scheme above.
 2. The `$l:` prefix in a string is called the type _annotator_. The remaining
-   part of the string is called the _payload_. The type annotation determines
-   how the payload shall be interpreted.
+   part of the string is called the _payload_. The type annotator determines
+   how the payload is to be interpreted.
 3. For integers, the payload shall be the decimal, binary or hexadecimal
    representation of a signed 64-bit integer. Padding characters are not
    allowed. The value shall be within range.
