@@ -85,8 +85,6 @@ import('pkgconfig').generate(lib_taxon,
                    + 'encodes 64-bit integers, binary data, timestamps, etc. '
                    + 'in strict JSON syntax.')
 
-#===========================================================
-# Test rules
-#===========================================================
-t = executable('test_main', 'test_main.cpp', link_with: lib_taxon)
-test('test_main', t)
+test('test_main', executable('test_main', 'test_main.cpp',
+                             dependencies: [ dep_asteria ],
+                             link_with: lib_taxon))
