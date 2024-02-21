@@ -30,20 +30,21 @@ a no-go.
 
 Hence TAXON. The data types and representations are defined as follows:
 
-|C++ Type                |Remarks                |Examples                  |
-|:-----------------------|:----------------------|:-------------------------|
-|`nullptr`               |                       |`null`                    |
-|`bool`                  |                       |`true`, `false`           |
-|`int64_t`               |64-bit signed integer  |`"$l:123"`, `"$l:-0x7B"`  |
-|`double` (finite)       |floating-point number  |`123.45`                  |
-|`double` (infinity)     |                       |`"$d:inf"`, `"$d:-inf"`   |
-|`double` (NaN)          |                       |`"$d:nan"`, `$d:-nan`     |
-|`cow_string` (plain)    |UTF-8 string           |`"hello"`                 |
-|`cow_string` (escaped)  |                       |`"$s:hello"`              |
-|`cow_bstring` (hex)     |arbitrary bytes        |`"$h:68656c6c6f"`         |
-|`cow_bstring` (base64)  |                       |`"$b:aGVsbG8="`           |
-|`cow_vector`            |array                  |`[1,2,3]`                 |
-|`cow_hashmap`           |object                 |`{"x":"$h:4546","y":99}`  |
+|C++ Type                    |Remarks                    |Examples                  |
+|:---------------------------|:--------------------------|:-------------------------|
+|`nullptr`                   |                           |`null`                    |
+|`bool`                      |                           |`true`, `false`           |
+|`int64_t`                   |64-bit signed integer      |`"$l:123"`, `"$l:-0x7B"`  |
+|`double` (finite)           |IEEE-754 double-precision  |`123.45`                  |
+|`double` (infinity)         |                           |`"$d:inf"`, `"$d:-inf"`   |
+|`double` (NaN)              |                           |`"$d:nan"`, `$d:-nan`     |
+|`cow_string` (plain)        |UTF-8 string               |`"hello"`                 |
+|`cow_string` (escaped)      |                           |`"$s:hello"`              |
+|`cow_bstring` (hex)         |arbitrary bytes            |`"$h:68656c6c6f"`         |
+|`cow_bstring` (base64)      |                           |`"$b:aGVsbG8="`           |
+|`system_clock::time_point`  |UNIX time in milliseconds  |`"$t:1708444618089"`      |
+|`cow_vector`                |array of values            |`[1,2,3]`                 |
+|`cow_hashmap`               |dictionary of values       |`{"x":"$h:4546","y":99}`  |
 
 1. Integers, non-finite floating-point numbers and binary data must be encoded
    as strings, according to the scheme above.
