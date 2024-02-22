@@ -112,16 +112,16 @@ do_print_utf8_string(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
 
         case -2:
           // The input is complete but has been consumed entirely. As we have passed
-          // the entire string, this means it is invalid. Consume all bytes but
-          // print a replacement character.
+          // the entire string, it must be invalid. Consume all bytes but print a
+          // replacement character.
           bptr = eptr;
           c16 = u'\uFFFD';
           break;
 
         case -1:
-          // An invalid byte has been encountered. Consume one byte but print a
-          // replacement character. The `mbstate_t` structure shall be reset for the
-          // next character.
+          // An invalid byte has been encountered. The `mbstate_t` structure is
+          // undefined and shall be reset for the next character. Consume one byte
+          // but print a replacement character.
           mbstate = { };
           bptr ++;
           c16 = u'\uFFFD';
