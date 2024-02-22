@@ -57,7 +57,7 @@ struct Parser_Context
     const char* error;
 
     // !! internal fields !!
-    int32_t c32;
+    char32_t c;
     uint32_t reserved;
   };
 

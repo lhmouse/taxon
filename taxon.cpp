@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <clocale>
+#include <climits>
 #include <cuchar>
 namespace taxon {
 
@@ -65,10 +66,224 @@ do_check_global_locale() noexcept
           locale ? locale : "(no locale)");
   }
 
+static
+void
+do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+    char mb_seq[MB_LEN_MAX];
+    ::std::mbstate_t mbstate = { };
+    ::std::size_t cr;
+    int ch;
+
+    if(tok_opt) {
+      // Move the current character from `ctx` to `*tok_opt`.
+      cr = ::std::c32rtomb(mb_seq, ctx.c, &mbstate);
+      ROCKET_ASSERT(cr <= 4);
+      tok_opt->append(mb_seq, cr);
+    }
+
+    // Move the next character from `buf` to `ctx`.
+  do_get_char32_loop_:
+    ctx.c = UINT32_MAX;
+    ctx.offset = buf.tell();
+
+    ch = buf.getc();
+    if(ch == -1) {
+      ctx.error = "no more input data";
+      return;
+    }
+
+    mb_seq[0] = static_cast<char>(ch);
+    cr = ::std::mbrtoc32(&(ctx.c), mb_seq, 1, &mbstate);
+    switch(static_cast<int>(cr))
+      {
+      case -3:
+        // UTF-32 is a fixed-length encoding, so this never happens.
+        ROCKET_ASSERT(false);
+
+      case -2:
+        // The input byte is incomplete and has been consumed. Nothing has been
+        // written to `c32`.
+        goto do_get_char32_loop_;
+
+      case -1:
+        // An invalid byte has been encountered. The input is invalid. Nothing
+        // has been written to `c32`.
+        ctx.error = "invalid multibyte sequence";
+        return;
+      }
+  }
+
+static
+void
+do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+    // ws ::= [ '\u0009' '\u000A' '\u000D' '\u0020' ]
+    // number ::= '-'? integer fraction? exponent?
+    // integer ::= '0' | [ '1'-'9' ] [ '0'-'9' ]*
+    // fraction ::= '.' [ '0'-'9' ]+
+    // exponent ::= [ 'e' 'E' ] [ '+' '-' ]? [ '0'-'9' ]+
+    // string ::= '"' ( '"' | ( escape-seq | char )+ '"' )
+    // escape-seq ::= '\' ( simple-escape-char | utf16-escape-seq )
+    // simple-escape-char ::= [ '"' '\' '/' 'b' 'f' 'n' 'r' 't' ]
+    // utf16-escape-seq ::= 'u' [ '0'-'9' 'A'-'F' 'a'-'f' ]{4}
+    // char ::= [ '\u0020' '\u0021' '\u0023'-'\u005B' '\u005D'-'\u007E' '\u0080'-'\u00FF' ]
+    token.clear();
+
+    if(ctx.c == UINT32_MAX)
+      do_mov_char(nullptr, ctx, buf);
+
+    while((ctx.c == U'\t') || (ctx.c == U'\n') || (ctx.c == U'\r') || (ctx.c == U' '))
+      do_mov_char(nullptr, ctx, buf);
+
+    if(ctx.error)
+      return;
+
+    switch(ctx.c)
+      {
+      case U'_':
+      case U'a' ... U'z':
+      case U'A' ... U'Z':
+        {
+          // identifier
+          while((ctx.c == U'_') || ((ctx.c >= U'0') && (ctx.c <= U'9'))
+                || ((ctx.c >= U'A') && (ctx.c <= U'Z'))
+                || ((ctx.c >= U'a') && (ctx.c <= U'z')))
+            do_mov_char(&token, ctx, buf);
+        }
+        break;
+
+      case U'+':  // extension
+      case U'-':
+      case U'0' ... U'9':
+        {
+          // sign?
+          if((ctx.c == U'+') || (ctx.c == U'-'))
+            do_mov_char(&token, ctx, buf);
+
+          // integer
+          if(ctx.c == '0')
+            do_mov_char(&token, ctx, buf);
+          else
+            while((ctx.c >= U'0') && (ctx.c <= U'9'))
+              do_mov_char(&token, ctx, buf);
+
+          if(ctx.error)
+            return;
+
+          if(!((token.back() >= '0') && (token.back() <= '9'))) {
+            ctx.error = "invalid number";
+            return;
+          }
+
+          // fraction?
+          if(ctx.c == U'.') {
+            do_mov_char(&token, ctx, buf);
+
+            while((ctx.c >= U'0') && (ctx.c <= U'9'))
+              do_mov_char(&token, ctx, buf);
+
+            if(ctx.error)
+              return;
+
+            if(!((token.back() >= '0') && (token.back() <= '9'))) {
+              ctx.error = "invalid fraction";
+              return;
+            }
+          }
+
+          // exponent?
+          if((ctx.c == U'e') || (ctx.c == U'E')) {
+            do_mov_char(&token, ctx, buf);
+
+            if((ctx.c == U'+') || (ctx.c == U'-'))
+              do_mov_char(&token, ctx, buf);
+
+            while((ctx.c >= U'0') && (ctx.c <= U'9'))
+              do_mov_char(&token, ctx, buf);
+
+            if(ctx.error)
+              return;
+
+            if(!((token.back() >= '0') && (token.back() <= '9'))) {
+              ctx.error = "invalid exponent";
+              return;
+            }
+          }
+        }
+        break;
+
+      case '"':
+        {
+          // string
+do_mov_char(&token, ctx, buf);
+
+while((ctx.c != UINT32_MAX) && (ctx.c != U'"'))
+  do_mov_char(&token, ctx, buf);
+ctx.c = UINT32_MAX;
+
+        }
+        break;
+
+      case '[':
+      case ',':
+      case ']':
+      case '{':
+      case ':':
+      case '}':
+        {
+          // single character
+          token.push_back(static_cast<char>(ctx.c));
+          ctx.c = UINT32_MAX;
+        }
+        break;
+
+      default:
+        // invalid
+        ctx.error = "invalid character";
+        return;
+      }
+  }
+
 void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
+    do_check_global_locale();
+
+    // Initialize parser states.
+    ctx.c = UINT32_MAX;
+    ctx.offset = -1;
+    ctx.error = nullptr;
+
+    this->m_stor.emplace<V_null>();
+
+    // Break deep recursion with a handwritten stack.
+    struct xFrame
+      {
+        char closure;
+        V_array* psa;
+        V_object* pso;
+        ::rocket::prehashed_string key;
+      };
+
+    ::rocket::cow_vector<xFrame> stack;
+    ::rocket::ascii_numget numg;
+    ::rocket::cow_string token;
+    Variant* pstor = &(this->m_stor);
+
+    // json ::= ws* value
+    // value ::= 'null' | 'true' | 'false' | array | object | number | string
+    // array ::= '[' ws* ( ']' | value ws* comma-value-ws* ']' )
+    // comma-value-ws ::= ',' ws* value ws*
+    // object ::= '{' ws* ( '}' | string ws* ':' ws* value ws* comma-kv-pair-ws* '}")
+    // comma-kv-pair-ws ::= ',' ws* string ws* ':' ws* value ws*
+  do_pack_loop_:
+
+while(ctx.error == nullptr)
+ do_get_token(token, ctx, buf);
+
+
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 ;
   }
