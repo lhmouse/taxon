@@ -94,8 +94,8 @@ parse_file(::FILE* fp, Parser_Result* result_opt)
 
 static
 void
-do_print_utf8_string(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
-                     const ::rocket::cow_string& str)
+do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
+                              const ::rocket::cow_string& str)
   {
     const char* bptr = str.c_str();
     const char* const eptr = str.c_str() + str.length();
@@ -313,7 +313,7 @@ print(::rocket::tinybuf& buf) const
           frm.pso = &(pstor->as<V_object>());
           frm.ito = frm.pso->begin();
           buf.putn("{\"", 2);
-          do_print_utf8_string(buf, nump, frm.ito->first.rdstr());
+          do_print_utf8_string_unquoted(buf, nump, frm.ito->first.rdstr());
           buf.putn("\":", 2);
           pstor = &(frm.ito->second.m_stor);
           goto do_unpack_loop_;
@@ -352,13 +352,13 @@ print(::rocket::tinybuf& buf) const
         if(pstor->as<V_string>()[0] != '$') {
           // general; quoted
           buf.putc('\"');
-          do_print_utf8_string(buf, nump, pstor->as<V_string>());
+          do_print_utf8_string_unquoted(buf, nump, pstor->as<V_string>());
           buf.putc('\"');
         }
         else {
           // starts with `$`; annotated
           buf.putn("\"$s:", 4);
-          do_print_utf8_string(buf, nump, pstor->as<V_string>());
+          do_print_utf8_string_unquoted(buf, nump, pstor->as<V_string>());
           buf.putc('\"');
         }
         break;
@@ -409,7 +409,7 @@ print(::rocket::tinybuf& buf) const
           if(++ frm.ito != frm.pso->end()) {
             // next
             buf.putn(",\"", 2);
-            do_print_utf8_string(buf, nump, frm.ito->first.rdstr());
+            do_print_utf8_string_unquoted(buf, nump, frm.ito->first.rdstr());
             buf.putn("\":", 2);
             pstor = &(frm.ito->second.m_stor);
             goto do_unpack_loop_;
