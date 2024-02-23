@@ -61,35 +61,59 @@ do_check_global_locale() noexcept
 
     if(!found)
       ::std::fprintf(stderr,
-            "WARNING: Please set a UTF-8 locale instead of `%s`.\n",
-            locale ? locale : "(no locale)");
+          "WARNING: Please set a UTF-8 locale instead of `%s`.\n",
+          locale ? locale : "(no locale)");
   }
 
-bool
+void
 Value::
-parse(::rocket::tinybuf& buf, Parser_Result* result_opt)
+parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
 // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-
-    return false;
+;
   }
 
-bool
+void
 Value::
-parse_string(const ::rocket::cow_string& str, Parser_Result* result_opt)
+parse_with(Parser_Context& ctx, const ::rocket::cow_string& str)
   {
-    ::rocket::tinybuf_str buf(str);
-    bool succ = this->parse(buf, result_opt);
-    return succ;
+    ::rocket::tinybuf_str buf(str, ::rocket::tinybuf::open_read);
+    this->parse_with(ctx, buf);
   }
 
-bool
+void
 Value::
-parse_file(::std::FILE* fp, Parser_Result* result_opt)
+parse_with(Parser_Context& ctx, ::std::FILE* fp)
   {
     ::rocket::tinybuf_file buf(fp, nullptr);
-    bool succ = this->parse(buf, result_opt);
-    return succ;
+    this->parse_with(ctx, buf);
+  }
+
+bool
+Value::
+parse(::rocket::tinybuf& buf)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, buf);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(const ::rocket::cow_string& str)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, str);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(::std::FILE* fp)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, fp);
+    return !ctx.error;
   }
 
 static
@@ -430,7 +454,7 @@ void
 Value::
 print_to(::rocket::cow_string& str) const
   {
-    ::rocket::tinybuf_str buf(::std::move(str));
+    ::rocket::tinybuf_str buf(::std::move(str), ::rocket::tinybuf::open_write);
     this->print_to(buf);
     str = buf.extract_string();
   }
@@ -447,7 +471,7 @@ print_to(::std::FILE* fp) const
 Value::
 print_to_string() const
   {
-    ::rocket::tinybuf_str buf;
+    ::rocket::tinybuf_str buf(::rocket::tinybuf::open_write);
     this->print_to(buf);
     return buf.extract_string();
   }

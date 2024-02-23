@@ -13,7 +13,7 @@
 #include <chrono>
 namespace taxon {
 
-struct Parser_Result;
+struct Parser_Context;
 class Value;
 
 // Define aliases and enumerators for data types.
@@ -46,20 +46,22 @@ using V_time    = ::std::chrono::system_clock::time_point;
 enum Type : ::std::uint8_t {TAXON_GENERATOR_IEZUVAH3_(t)};
 using Variant = ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(V)>;
 
-// This structure provides detailed information about a parse operation. All parsing
-// functions take an optional output pointer to `Parser_Result`. This structure does
-// not have to be initialized before the call.
-struct Parser_Result
+// This structure provides storage for all parser states. Some of these fields are
+// for internal use. This structure need not be initialized before `parse()`.
+struct Parser_Context
   {
-    // If there was no error, this is a null pointer. Otherwise, this points to a
-    // string about the error. The string is static and read-only, and must not be
-    // modified or freed.
+    // stream offset of the next operation
+    ::std::int64_t offset;
+
+    // if no error, a null pointer; otherwise, a static string about the error
     const char* error;
 
-    // If there was no error, this is the total number of bytes that were consumed;
-    // in other words, this is the index past the last accepted byte. Otherwise,
-    // this is the index to the byte that caused the error.
-    size_t offset;
+    // internal fields
+    uint8_t has_backup : 1;
+    uint8_t reserved_t0 : 7;
+    char backup;
+    uint8_t reserved_t2;
+    uint8_t reserved_t3;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is
@@ -568,19 +570,27 @@ class Value
         return *this;
       }
 
-    // Parses a buffer for a value, and stores it into the this object. Errors are
-    // reported via `*error_opt`. If a value has been stored successfully, `true`
-    // is returned; otherwise `false` is returned and the contents of this object
-    // is unspecified.
-    bool
-    parse(::rocket::tinybuf& buf, Parser_Result* result_opt = nullptr);
+    // Parse a buffer for a value, and store it into the current object. Errors are
+    // stored into the `Parser_Context`. The context object does not have to be
+    // initialized. If this function throws an exception, the value of the current
+    // object is indeterminate.
+    void
+    parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf);
 
-    // Parse something else.
-    bool
-    parse_string(const ::rocket::cow_string& str, Parser_Result* result_opt = nullptr);
+    void
+    parse_with(Parser_Context& ctx, const ::rocket::cow_string& str);
+
+    void
+    parse_with(Parser_Context& ctx, ::std::FILE* fp);
 
     bool
-    parse_file(::std::FILE* fp, Parser_Result* result_opt = nullptr);
+    parse(::rocket::tinybuf& buf);
+
+    bool
+    parse(const ::rocket::cow_string& str);
+
+    bool
+    parse(::std::FILE* fp);
 
     // Print this value. Invalid values are sanitized so they may become garbage or
     // null, but the entire output will always be valid TAXON. This function should
