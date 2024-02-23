@@ -123,6 +123,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
   {
     const char* bptr = str.c_str();
     const char* const eptr = str.c_str() + str.length();
+
     ::std::mbstate_t mbstate = { };
     char16_t c16;
     ::std::size_t cr;
@@ -164,44 +165,56 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
           break;
         }
 
-      if(c16 == u'\"') {
-        // `\"`
-        buf.putn("\\\"", 2);
-      }
-      else if(c16 == u'\\') {
-        // `\\`
-        buf.putn("\\\\", 2);
-      }
-      else if(c16 == u'\b') {
-        // `\b`; backspace
-        buf.putn("\\b", 2);
-      }
-      else if(c16 == u'\f') {
-        // `\f`; form feed
-        buf.putn("\\f", 2);
-      }
-      else if(c16 == u'\n') {
-        // `\n`; line feed
-        buf.putn("\\n", 2);
-      }
-      else if(c16 == u'\r') {
-        // `\r`; carrige return
-        buf.putn("\\r", 2);
-      }
-      else if(c16 == u'\t') {
-        // `\t`; horizontal tab
-        buf.putn("\\t", 2);
-      }
-      else if((c16 >= 0x20) && (c16 <= 0x7E)) {
-        // ASCII printable
-        buf.putc(static_cast<char>(c16));
-      }
-      else {
-        // UTF-16
-        nump.put_XU(c16, 4);
-        char temp[] = { '\\', 'u', nump[2], nump[3], nump[4], nump[5] };
-        buf.putn(temp, sizeof(temp));
-      }
+      switch(c16)
+        {
+        case u'\b':
+          // `\b`; backspace
+          buf.putn("\\b", 2);
+          break;
+
+        case u'\f':
+          // `\f`; form feed
+          buf.putn("\\f", 2);
+          break;
+
+        case u'\n':
+          // `\n`; line feed
+          buf.putn("\\n", 2);
+          break;
+
+        case u'\r':
+          // `\r`; carrige return
+          buf.putn("\\r", 2);
+          break;
+
+        case u'\t':
+          // `\t`; horizontal tab
+          buf.putn("\\t", 2);
+          break;
+
+        case u'\u0020' ... u'\u007E':
+          {
+            // ASCII printable
+            if((c16 == '"') || (c16 == '\\') || (c16 == '/')) {
+              char esc_seq[4] = "\\";
+              esc_seq[1] = static_cast<char>(c16);
+              buf.putn(esc_seq, 2);
+            }
+            else
+              buf.putc(static_cast<char>(c16));
+          }
+          break;
+
+        default:
+          {
+            // UTF-16
+            nump.put_XU(c16, 4);
+            char esc_u_seq[8] = "\\u";
+            ::std::memcpy(esc_u_seq + 2, nump.data() + 2, 4);
+            buf.putn(esc_u_seq, 6);
+          }
+          break;
+        }
     }
   }
 
@@ -263,6 +276,7 @@ do_print_binary_in_base64(::rocket::tinybuf& buf, const ::rocket::cow_bstring& b
   {
     const unsigned char* bptr = bin.data();
     const unsigned char* const eptr = bin.data() + bin.size();
+
     ::std::ptrdiff_t remainder;
     ::std::uint32_t word;
     char b64word[4];
