@@ -138,9 +138,9 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
           break;
 
         case -2:
-          // The input is complete but has been consumed entirely. As we have passed
-          // the entire string, it must be invalid. Consume all bytes but print a
-          // replacement character.
+          // The input is incomplete, but has been consumed entirely. As we have
+          // passed the entire string, it must be invalid. Consume all bytes but
+          // print a replacement character.
           bptr = eptr;
           c16 = u'\uFFFD';
           break;
