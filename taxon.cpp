@@ -457,6 +457,9 @@ print_to_file(::FILE* fp) const
 }  // namespace taxon
 
 template
+class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
+
+template
 class ::rocket::cow_vector<::taxon::Value>;
 
 template

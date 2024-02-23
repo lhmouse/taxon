@@ -29,13 +29,22 @@ using V_string  = ::rocket::cow_string;
 using V_binary  = ::rocket::cow_bstring;
 using V_time    = ::std::chrono::system_clock::time_point;
 
-enum Type : uint8_t
-//{     0        1         2          3          4         5         6         7       8  }
-  { t_null, t_array, t_object, t_boolean, t_integer, t_number, t_string, t_binary, t_time };
+// Expand a sequence of alternatives without a trailing comma. This macro is part of
+// the ABI.
+#define TAXON_GENERATOR_IEZUVAH3_(U)  \
+    /*  0 */  U##_null  \
+    /*  1 */, U##_array  \
+    /*  2 */, U##_object  \
+    /*  3 */, U##_boolean  \
+    /*  4 */, U##_integer  \
+    /*  5 */, U##_number  \
+    /*  6 */, U##_string  \
+    /*  7 */, U##_binary  \
+    /*  8 */, U##_time
 
-using Variant = ::rocket::variant
-//{     0        1         2          3          4         5         6         7       8  }
-  < V_null, V_array, V_object, V_boolean, V_integer, V_number, V_string, V_binary, V_time >;
+// Define type enumerators such as `t_null`, `t_array`, `t_number`, and so on.
+enum Type : ::std::uint8_t {TAXON_GENERATOR_IEZUVAH3_(t)};
+using Variant = ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(V)>;
 
 // This structure provides detailed information about a parse operation. All parsing
 // functions take an optional output pointer to `Parser_Result`. This structure does
@@ -609,6 +618,9 @@ static_assert(::std::is_nothrow_move_constructible<Value>::value, "");
 static_assert(::std::is_nothrow_move_assignable<Value>::value, "");
 
 }  // namespace taxon
+
+extern template
+class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
 
 extern template
 class ::rocket::cow_vector<::taxon::Value>;
