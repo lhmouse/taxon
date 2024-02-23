@@ -242,9 +242,9 @@ static constexpr
 char
 do_get_base64_digit(::std::uint32_t word) noexcept
   {
-    return (word < 26) ? static_cast<char>(u'A' + word)
-         : (word < 52) ? static_cast<char>(u'a' + word - 26)
-         : (word < 62) ? static_cast<char>(u'0' + word - 52)
+    return (word < 26) ? static_cast<char>('A' + word)
+         : (word < 52) ? static_cast<char>('a' + word - 26)
+         : (word < 62) ? static_cast<char>('0' + word - 52)
          : (word < 63) ? '+' : '/';
   }
 

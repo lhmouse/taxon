@@ -56,12 +56,10 @@ struct Parser_Context
     // if no error, a null pointer; otherwise, a static string about the error
     const char* error;
 
-    // internal fields
-    unsigned char has_nextc : 1;
-    unsigned char reserved_t0 : 7;
-    unsigned char nextc;
-    unsigned char reserved_t2;
-    unsigned char reserved_t3;
+    // !! internal fields !!
+    short ch;
+    short reserved_1;
+    int reserved_2;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is
