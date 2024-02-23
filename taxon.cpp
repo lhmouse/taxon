@@ -240,12 +240,21 @@ do_print_binary_in_hex(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
 
 static constexpr
 char
-do_get_base64_digit(::std::uint32_t word) noexcept
+do_get_base64_digit(::std::uint32_t word)
   {
     return (word < 26) ? static_cast<char>('A' + word)
          : (word < 52) ? static_cast<char>('a' + word - 26)
          : (word < 62) ? static_cast<char>('0' + word - 52)
          : (word < 63) ? '+' : '/';
+  }
+
+static
+bool
+do_use_hex_for(const ::rocket::cow_bstring& bin)
+  {
+    return (bin.size() == 1) || (bin.size() == 2) || (bin.size() == 4)
+           || (bin.size() == 8) || (bin.size() == 12) || (bin.size() == 16)
+           || (bin.size() == 20) || (bin.size() == 28)|| (bin.size() == 32);
   }
 
 static
@@ -305,7 +314,6 @@ print_to(::rocket::tinybuf& buf) const
 
     ::rocket::cow_vector<xFrame> stack;
     ::rocket::ascii_numput nump;
-    static constexpr ::std::uint8_t use_hex_for[] = { 1, 2, 4, 8, 16, 20, 32 };
     const Variant* pstor = &(this->m_stor);
 
   do_unpack_loop_:
@@ -388,7 +396,7 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_binary:
-        if(::rocket::is_any_of(pstor->as<V_binary>().size(), use_hex_for)) {
+        if(do_use_hex_for(pstor->as<V_binary>())) {
           // short; hex
           buf.putn("\"$h:", 4);
           do_print_binary_in_hex(buf, nump, pstor->as<V_binary>());

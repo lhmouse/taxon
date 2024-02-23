@@ -593,8 +593,9 @@ class Value
     // Print this value. Invalid values are sanitized so they may become garbage or
     // null, but the entire output will always be valid TAXON. This function should
     // not throw exceptions on invalid inputs; only in case of an I/O error or
-    // failure to allocate memory. A byte string of length 1, 2, 4, 8, 16, 20 or 32
-    // is encoded in hex and a byte string of any other length is encoded in base64.
+    // failure to allocate memory. A byte string of length 1, 2, 4, 8, 12, 16, 20,
+    // 28 or 32 is encoded in hex and a byte string of any other length is encoded
+    // in base64.
     void
     print_to(::rocket::tinybuf& buf) const;
 
