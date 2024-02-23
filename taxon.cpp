@@ -118,8 +118,7 @@ parse(::std::FILE* fp)
 
 static
 void
-do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
-                              const ::rocket::cow_string& str)
+do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
   {
     const char* bptr = str.c_str();
     const char* const eptr = str.c_str() + str.length();
@@ -195,7 +194,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
         case u'\u0020' ... u'\u007E':
           {
             // ASCII printable
-            if((c16 == '"') || (c16 == '\\') || (c16 == '/')) {
+            if((c16 == u'"') || (c16 == u'\\') || (c16 == u'/')) {
               char esc_seq[4] = "\\";
               esc_seq[1] = static_cast<char>(c16);
               buf.putn(esc_seq, 2);
@@ -208,6 +207,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
         default:
           {
             // UTF-16
+            ::rocket::ascii_numput nump;
             nump.put_XU(c16, 4);
             char esc_u_seq[8] = "\\u";
             ::std::memcpy(esc_u_seq + 2, nump.data() + 2, 4);
@@ -220,12 +220,12 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, ::rocket::ascii_numput& nu
 
 static
 void
-do_print_binary_in_hex(::rocket::tinybuf& buf, ::rocket::ascii_numput& nump,
-                       const ::rocket::cow_bstring& bin)
+do_print_binary_in_hex(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
   {
     const unsigned char* bptr = bin.data();
     const unsigned char* const eptr = bin.data() + bin.size();
     ::std::uint64_t word;
+    ::rocket::ascii_numput nump;
 
     while(eptr - bptr >= 8) {
       // 8-byte group
@@ -359,7 +359,7 @@ print_to(::rocket::tinybuf& buf) const
           frm.pso = &(pstor->as<V_object>());
           frm.ito = frm.pso->begin();
           buf.putn("{\"", 2);
-          do_print_utf8_string_unquoted(buf, nump, frm.ito->first.rdstr());
+          do_print_utf8_string_unquoted(buf, frm.ito->first.rdstr());
           buf.putn("\":", 2);
           pstor = &(frm.ito->second.m_stor);
           goto do_unpack_loop_;
@@ -398,13 +398,13 @@ print_to(::rocket::tinybuf& buf) const
         if(pstor->as<V_string>()[0] != '$') {
           // general; quoted
           buf.putc('\"');
-          do_print_utf8_string_unquoted(buf, nump, pstor->as<V_string>());
+          do_print_utf8_string_unquoted(buf, pstor->as<V_string>());
           buf.putc('\"');
         }
         else {
           // starts with `$`; annotated
           buf.putn("\"$s:", 4);
-          do_print_utf8_string_unquoted(buf, nump, pstor->as<V_string>());
+          do_print_utf8_string_unquoted(buf, pstor->as<V_string>());
           buf.putc('\"');
         }
         break;
@@ -413,7 +413,7 @@ print_to(::rocket::tinybuf& buf) const
         if(do_use_hex_for(pstor->as<V_binary>())) {
           // short; hex
           buf.putn("\"$h:", 4);
-          do_print_binary_in_hex(buf, nump, pstor->as<V_binary>());
+          do_print_binary_in_hex(buf, pstor->as<V_binary>());
           buf.putc('\"');
         }
         else {
@@ -455,7 +455,7 @@ print_to(::rocket::tinybuf& buf) const
           if(++ frm.ito != frm.pso->end()) {
             // next
             buf.putn(",\"", 2);
-            do_print_utf8_string_unquoted(buf, nump, frm.ito->first.rdstr());
+            do_print_utf8_string_unquoted(buf, frm.ito->first.rdstr());
             buf.putn("\":", 2);
             pstor = &(frm.ito->second.m_stor);
             goto do_unpack_loop_;
