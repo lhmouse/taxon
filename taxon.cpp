@@ -263,9 +263,9 @@ do_print_binary_in_base64(::rocket::tinybuf& buf, const ::rocket::cow_bstring& b
     }
   }
 
-::rocket::tinybuf&
+void
 Value::
-print(::rocket::tinybuf& buf) const
+print_to(::rocket::tinybuf& buf) const
   {
     do_check_global_locale();
 
@@ -424,16 +424,23 @@ print(::rocket::tinybuf& buf) const
       buf.putc(frm.closure);
       stack.pop_back();
     }
-
-    return buf;
   }
 
-::rocket::tinyfmt&
+void
 Value::
-print(::rocket::tinyfmt& fmt) const
+print_to(::rocket::cow_string& str) const
   {
-    this->print(fmt.mut_buf());
-    return fmt;
+    ::rocket::tinybuf_str buf(::std::move(str));
+    this->print_to(buf);
+    str = buf.extract_string();
+  }
+
+void
+Value::
+print_to(::FILE* fp) const
+  {
+    ::rocket::tinybuf_file buf(fp, nullptr);
+    this->print_to(buf);
   }
 
 ::rocket::cow_string
@@ -441,17 +448,16 @@ Value::
 print_to_string() const
   {
     ::rocket::tinybuf_str buf;
-    this->print(buf);
+    this->print_to(buf);
     return buf.extract_string();
   }
 
-bool
+void
 Value::
-print_to_file(::FILE* fp) const
+print_to_stderr() const
   {
-    ::rocket::tinybuf_file buf(fp, nullptr);
-    this->print(buf);
-    return ::std::ferror(buf.get_handle()) == 0;
+    ::rocket::tinybuf_file buf(stderr, nullptr);
+    this->print_to(buf);
   }
 
 }  // namespace taxon

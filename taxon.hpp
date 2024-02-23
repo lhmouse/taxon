@@ -582,33 +582,41 @@ class Value
     bool
     parse_file(::FILE* fp, Parser_Result* result_opt = nullptr);
 
-    // Prints this value to a buffer. Invalid values are sanitized so they may
-    // become garbage or null, but the entire output will always be valid TAXON.
-    // A byte string of length 1, 2, 4, 8, 16, 20 or 32 is encoded in hex, and a
-    // byte string of any other length is encoded in base64.
-    ::rocket::tinybuf&
-    print(::rocket::tinybuf& buf) const;
+    // Print this value. Invalid values are sanitized so they may become garbage or
+    // null, but the entire output will always be valid TAXON. This function should
+    // not throw exceptions on invalid inputs; only in case of an I/O error or
+    // failure to allocate memory. A byte string of length 1, 2, 4, 8, 16, 20 or 32
+    // is encoded in hex and a byte string of any other length is encoded in base64.
+    void
+    print_to(::rocket::tinybuf& buf) const;
 
-    // Prints this value to somewhere else.
-    ::rocket::tinyfmt&
-    print(::rocket::tinyfmt& fmt) const;
+    void
+    print_to(::rocket::cow_string& str) const;
+
+    void
+    print_to(::FILE* fp) const;
 
     ::rocket::cow_string
     print_to_string() const;
 
-    bool
-    print_to_file(::FILE* fp) const;
+    void
+    print_to_stderr() const;
   };
 
 inline
 void
 swap(Value& lhs, Value& rhs) noexcept
-  { lhs.swap(rhs);  }
+  {
+    lhs.swap(rhs);
+  }
 
 inline
 ::rocket::tinyfmt&
 operator<<(::rocket::tinyfmt& fmt, const Value& value)
-  { return value.print(fmt);  }
+  {
+    value.print_to(fmt.mut_buf());
+    return fmt;
+  }
 
 // Values are reference-counting so all these will not throw exceptions. It is
 // recommended that they be passed by value or by const reference.
