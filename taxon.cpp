@@ -34,7 +34,7 @@ Value::
     }
     catch(::std::exception& stdex) {
       // Ignore this exception.
-      ::fprintf(stderr, "WARNING: %s\n", stdex.what());
+      ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());
     }
 
     if(!stack.empty()) {
@@ -85,7 +85,7 @@ parse_string(const ::rocket::cow_string& str, Parser_Result* result_opt)
 
 bool
 Value::
-parse_file(::FILE* fp, Parser_Result* result_opt)
+parse_file(::std::FILE* fp, Parser_Result* result_opt)
   {
     ::rocket::tinybuf_file buf(fp, nullptr);
     bool succ = this->parse(buf, result_opt);
@@ -437,7 +437,7 @@ print_to(::rocket::cow_string& str) const
 
 void
 Value::
-print_to(::FILE* fp) const
+print_to(::std::FILE* fp) const
   {
     ::rocket::tinybuf_file buf(fp, nullptr);
     this->print_to(buf);

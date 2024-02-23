@@ -580,7 +580,7 @@ class Value
     parse_string(const ::rocket::cow_string& str, Parser_Result* result_opt = nullptr);
 
     bool
-    parse_file(::FILE* fp, Parser_Result* result_opt = nullptr);
+    parse_file(::std::FILE* fp, Parser_Result* result_opt = nullptr);
 
     // Print this value. Invalid values are sanitized so they may become garbage or
     // null, but the entire output will always be valid TAXON. This function should
@@ -594,7 +594,7 @@ class Value
     print_to(::rocket::cow_string& str) const;
 
     void
-    print_to(::FILE* fp) const;
+    print_to(::std::FILE* fp) const;
 
     ::rocket::cow_string
     print_to_string() const;
