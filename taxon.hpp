@@ -57,11 +57,11 @@ struct Parser_Context
     const char* error;
 
     // internal fields
-    uint8_t has_backup : 1;
-    uint8_t reserved_t0 : 7;
-    char backup;
-    uint8_t reserved_t2;
-    uint8_t reserved_t3;
+    unsigned char has_nextc : 1;
+    unsigned char reserved_t0 : 7;
+    unsigned char nextc;
+    unsigned char reserved_t2;
+    unsigned char reserved_t3;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is
