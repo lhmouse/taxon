@@ -57,9 +57,8 @@ struct Parser_Context
     const char* error;
 
     // !! internal fields !!
-    short ch;
-    short reserved_1;
-    int reserved_2;
+    int32_t c32;
+    uint32_t reserved;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is
