@@ -37,7 +37,7 @@ Hence TAXON. The data types and representations are defined as follows:
 |`int64_t`                   |64-bit signed integer      |`"$l:123"`, `"$l:-0x7B"`  |
 |`double` (finite)           |IEEE-754 double-precision  |`123.45`                  |
 |`double` (infinity)         |                           |`"$d:inf"`, `"$d:-inf"`   |
-|`double` (NaN)              |                           |`"$d:nan"`, `$d:-nan`     |
+|`double` (NaN)              |                           |`"$d:nan"`, `"$d:-nan"`   |
 |`cow_string` (plain)        |UTF-8 string               |`"hello"`                 |
 |`cow_string` (escaped)      |                           |`"$s:hello"`              |
 |`cow_bstring` (hex)         |arbitrary bytes            |`"$h:68656c6c6f"`         |
