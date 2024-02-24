@@ -199,15 +199,16 @@ main(void)
     }
 
     {
-      static constexpr unsigned char bytes[] = "\x01\x00\x03\xC0";
-      ::taxon::Value val = ::rocket::cow_bstring(bytes, 4);
+      static constexpr unsigned char bytes[] =
+          "\xc9\x89\x0d\x33\xa3\x9b\x0e\x85\x88\x33\x44\x7c";
+      ::taxon::Value val = ::rocket::cow_bstring(bytes, 12);
       assert(val.type() == ::taxon::t_binary);
       assert(val.is_binary());
-      assert(val.as_binary().size() == 4);
-      assert(val.as_binary().compare(bytes, 4) == 0);
-      assert(val.as_binary_size() == 4);
-      assert(::memcmp(val.as_binary_data(), bytes, 4) == 0);
-      assert(val.print_to_string() == R"("$h:010003C0")");
+      assert(val.as_binary().size() == 12);
+      assert(val.as_binary().compare(bytes, 12) == 0);
+      assert(val.as_binary_size() == 12);
+      assert(::memcmp(val.as_binary_data(), bytes, 13) == 0);
+      assert(val.print_to_string() == R"("$h:c9890d33a39b0e858833447c")");
 
       static constexpr ::std::chrono::milliseconds dur(123456789);
       static constexpr ::std::chrono::system_clock::time_point tp(dur);

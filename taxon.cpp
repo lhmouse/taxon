@@ -13,6 +13,14 @@
 namespace taxon {
 namespace {
 
+using ::std::uint8_t;
+using ::std::uint16_t;
+using ::std::uint32_t;
+using ::std::uint64_t;
+using ::std::ptrdiff_t;
+using ::std::size_t;
+using ::std::mbstate_t;
+
 void
 do_check_global_locale() noexcept
   {
@@ -37,12 +45,12 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
     const char* bptr = str.c_str();
     const char* const eptr = str.c_str() + str.length();
 
-    ::std::mbstate_t mbstate = { };
+    mbstate_t mbstate = { };
     char16_t c16;
-    ::std::size_t cr;
+    size_t cr;
 
     while(bptr != eptr) {
-      cr = ::std::mbrtoc16(&c16, bptr, static_cast<::std::size_t>(eptr - bptr), &mbstate);
+      cr = ::std::mbrtoc16(&c16, bptr, static_cast<size_t>(eptr - bptr), &mbstate);
       switch(static_cast<int>(cr))
         {
         case -3:
@@ -129,94 +137,6 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
           }
           break;
         }
-    }
-  }
-
-bool
-do_use_hex_for(const ::rocket::cow_bstring& bin)
-  {
-    return (bin.size() == 1) || (bin.size() == 2) || (bin.size() == 4)
-           || (bin.size() == 8) || (bin.size() == 12) || (bin.size() == 16)
-           || (bin.size() == 20) || (bin.size() == 28)|| (bin.size() == 32);
-  }
-
-void
-do_print_binary_in_hex(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
-  {
-    const unsigned char* bptr = bin.data();
-    const unsigned char* const eptr = bin.data() + bin.size();
-    ::std::uint64_t word;
-    ::rocket::ascii_numput nump;
-
-    while(eptr - bptr >= 8) {
-      // 8-byte group
-      ::std::memcpy(&word, bptr, 8);
-      bptr += 8;
-      nump.put_XU(ROCKET_BETOH64(word), 16);
-      buf.putn(nump.data() + 2, 16);
-    }
-
-    if(eptr - bptr >= 4) {
-      // 4-byte group
-      ::std::memcpy(&word, bptr, 4);
-      bptr += 4;
-      nump.put_XU(ROCKET_BETOH64(word), 16);
-      buf.putn(nump.data() + 2, 8);
-    }
-
-    while(bptr != eptr) {
-      // bytewise
-      nump.put_XU(*bptr, 2);
-      bptr ++;
-      buf.putn(nump.data() + 2, 2);
-    }
-  }
-
-char
-do_get_base64_digit(::std::uint32_t word)
-  {
-    return (word < 26) ? static_cast<char>('A' + word)
-         : (word < 52) ? static_cast<char>('a' + word - 26)
-         : (word < 62) ? static_cast<char>('0' + word - 52)
-         : (word < 63) ? '+' : '/';
-  }
-
-void
-do_print_binary_in_base64(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
-  {
-    const unsigned char* bptr = bin.data();
-    const unsigned char* const eptr = bin.data() + bin.size();
-
-    ::std::ptrdiff_t remainder;
-    ::std::uint32_t word;
-    char b64word[4];
-
-    while(eptr - bptr >= 3) {
-      // 3-byte group
-      ::std::memcpy(&word, bptr, 4);  // make use of the null terminator!
-      bptr += 3;
-      word = ROCKET_BETOH32(word);
-
-      b64word[0] = do_get_base64_digit(word >> 26);
-      b64word[1] = do_get_base64_digit(word >> 20 & 0x3F);
-      b64word[2] = do_get_base64_digit(word >> 14 & 0x3F);
-      b64word[3] = do_get_base64_digit(word >>  8 & 0x3F);
-      buf.putn(b64word, 4);
-    }
-
-    if(bptr != eptr) {
-      // 1-byte or 2-byte group
-      remainder = eptr - bptr;
-      word = 0;
-      ::std::memcpy(&word, bptr, 2);  // make use of the null terminator!
-      bptr = eptr;
-      word = ROCKET_BETOH32(word);
-
-      b64word[0] = do_get_base64_digit(word >> 26);
-      b64word[1] = do_get_base64_digit(word >> 20 & 0x3F);
-      b64word[2] = (remainder == 1) ? '=' : do_get_base64_digit(word >> 14 & 0x3F);
-      b64word[3] = '=';
-      buf.putn(b64word, 4);
     }
   }
 
@@ -407,16 +327,114 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_binary:
-        if(do_use_hex_for(pstor->as<V_binary>())) {
-          // short; hex
-          buf.putn("\"$h:", 4);
-          do_print_binary_in_hex(buf, pstor->as<V_binary>());
-          buf.putc('\"');
-        }
-        else {
-          // general; base64
-          buf.putn("\"$b:", 4);
-          do_print_binary_in_base64(buf, pstor->as<V_binary>());
+        {
+          const auto& bin = pstor->as<V_binary>();
+          const unsigned char* bptr = bin.data();
+          const unsigned char* const eptr = bin.data() + bin.size();
+
+          constexpr uint8_t hex_sizes[] = { 1, 2, 4, 8, 12, 16, 20, 28, 32 };
+          if(::rocket::is_any_of(bin.size(), hex_sizes)) {
+            // hex
+            buf.putn("\"$h:", 4);
+
+            uint64_t word;
+            size_t nrem;
+            char hex_word[16];
+
+            const auto hex_digit = [](uint64_t b)
+              {
+                switch(b) {
+                  case  0 ...  9: return static_cast<char>('0' + b);
+                  case 10 ... 15: return static_cast<char>('a' + b - 10);
+                }
+                ROCKET_ASSERT(false);
+              };
+
+            while(eptr - bptr >= 8) {
+              // 8-byte group
+              ::std::memcpy(&word, bptr, 8);
+              word = ROCKET_BETOH64(word);
+              bptr += 8;
+
+              for(uint32_t t = 0;  t != 16;  ++t) {
+                hex_word[t] = hex_digit(word >> 60);
+                word <<= 4;
+              }
+
+              buf.putn(hex_word, 16);
+            }
+
+            if(bptr != eptr) {
+              // <=7-byte group
+              nrem = static_cast<size_t>(eptr - bptr);
+              word = 0;
+
+              for(uint32_t t = 0;  t != nrem;  ++t) {
+                word = word << 8 | static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
+                bptr ++;
+              }
+
+              for(uint32_t t = 0;  t != nrem * 2;  ++t) {
+                hex_word[t] = hex_digit(word >> 60);
+                word <<= 4;
+              }
+
+              buf.putn(hex_word, nrem * 2);
+            }
+          }
+          else {
+            // base64
+            buf.putn("\"$b:", 4);
+
+            uint32_t word;
+            size_t nrem;
+            char b64_word[4];
+
+            const auto base64_digit = [](uint32_t b)
+              {
+                switch(b) {
+                  case  0 ... 25: return static_cast<char>('A' + b);
+                  case 26 ... 51: return static_cast<char>('a' + b - 26);
+                  case 52 ... 61: return static_cast<char>('0' + b - 52);
+                  case        62: return '+';
+                  case        63: return '/';
+                }
+                ROCKET_ASSERT(false);
+              };
+
+            while(eptr - bptr >= 3) {
+              // 3-byte group
+              ::std::memcpy(&word, bptr, 4);  // use the null terminator!
+              word = ROCKET_BETOH32(word);
+              bptr += 3;
+
+              for(uint32_t t = 0;  t != 4;  ++t) {
+                b64_word[t] = base64_digit(word >> 26);
+                word <<= 6;
+              }
+
+              buf.putn(b64_word, 4);
+            }
+
+            if(bptr != eptr) {
+              // 1-byte or 2-byte group
+              nrem = static_cast<size_t>(eptr - bptr);
+              word = 0;
+              ::std::memcpy(&word, bptr, 2);  // use the null terminator!
+              word = ROCKET_BETOH32(word);
+              bptr += nrem;
+
+              b64_word[2] = '=';
+              b64_word[3] = '=';
+
+              for(uint32_t t = 0;  t != nrem + 1;  ++t) {
+                b64_word[t] = base64_digit(word >> 26);
+                word <<= 6;
+              }
+
+              buf.putn(b64_word, 4);
+            }
+          }
           buf.putc('\"');
         }
         break;
