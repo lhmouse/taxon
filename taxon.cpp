@@ -4,12 +4,18 @@
 #include "taxon.hpp"
 #include <rocket/tinybuf_str.hpp>
 #include <rocket/tinybuf_file.hpp>
-#include <rocket/ascii_numget.hpp>
 #include <rocket/ascii_numput.hpp>
+#include <rocket/ascii_numget.hpp>
 #include <cmath>
 #include <cstdio>
 #include <clocale>
+#include <climits>
+#include <cfloat>
 #include <cuchar>
+template class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
+template class ::rocket::cow_vector<::taxon::Value>;
+template class ::rocket::cow_hashmap<::rocket::prehashed_string,
+  ::taxon::Value, ::rocket::prehashed_string::hash>;
 namespace taxon {
 namespace {
 
@@ -337,10 +343,6 @@ print_to(::rocket::tinybuf& buf) const
             // hex
             buf.putn("\"$h:", 4);
 
-            uint64_t word;
-            size_t nrem;
-            char hex_word[16];
-
             const auto hex_digit = [](uint64_t b)
               {
                 switch(b) {
@@ -352,6 +354,9 @@ print_to(::rocket::tinybuf& buf) const
 
             while(eptr - bptr >= 8) {
               // 8-byte group
+              char hex_word[16];
+              uint64_t word;
+
               ::std::memcpy(&word, bptr, 8);
               word = ROCKET_BETOH64(word);
               bptr += 8;
@@ -366,8 +371,9 @@ print_to(::rocket::tinybuf& buf) const
 
             if(bptr != eptr) {
               // <=7-byte group
-              nrem = static_cast<size_t>(eptr - bptr);
-              word = 0;
+              size_t nrem = static_cast<size_t>(eptr - bptr);
+              char hex_word[16];
+              uint64_t word = 0;
 
               for(uint32_t t = 0;  t != nrem;  ++t) {
                 word = word << 8 | static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
@@ -386,10 +392,6 @@ print_to(::rocket::tinybuf& buf) const
             // base64
             buf.putn("\"$b:", 4);
 
-            uint32_t word;
-            size_t nrem;
-            char b64_word[4];
-
             const auto base64_digit = [](uint32_t b)
               {
                 switch(b) {
@@ -404,6 +406,9 @@ print_to(::rocket::tinybuf& buf) const
 
             while(eptr - bptr >= 3) {
               // 3-byte group
+              char b64_word[4];
+              uint32_t word;
+
               ::std::memcpy(&word, bptr, 4);  // use the null terminator!
               word = ROCKET_BETOH32(word);
               bptr += 3;
@@ -418,14 +423,13 @@ print_to(::rocket::tinybuf& buf) const
 
             if(bptr != eptr) {
               // 1-byte or 2-byte group
-              nrem = static_cast<size_t>(eptr - bptr);
-              word = 0;
+              size_t nrem = static_cast<size_t>(eptr - bptr);
+              char b64_word[4] = { 0, 0, '=', '=' };
+              uint32_t word = 0;
+
               ::std::memcpy(&word, bptr, 2);  // use the null terminator!
               word = ROCKET_BETOH32(word);
               bptr += nrem;
-
-              b64_word[2] = '=';
-              b64_word[3] = '=';
 
               for(uint32_t t = 0;  t != nrem + 1;  ++t) {
                 b64_word[t] = base64_digit(word >> 26);
@@ -522,13 +526,3 @@ print_to_stderr() const
   }
 
 }  // namespace taxon
-
-template
-class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
-
-template
-class ::rocket::cow_vector<::taxon::Value>;
-
-template
-class ::rocket::cow_hashmap<::rocket::prehashed_string,
-  ::taxon::Value, ::rocket::prehashed_string::hash>;

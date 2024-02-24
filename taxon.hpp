@@ -57,7 +57,7 @@ struct Parser_Context
     const char* error;
 
     // !! internal fields !!
-    ::std::int32_t c32;
+    char32_t c;
     ::std::uint32_t reserved;
   };
 
@@ -569,8 +569,8 @@ class Value
 
     // Parse a buffer for a value, and store it into the current object. Errors are
     // stored into the `Parser_Context`. The context object does not have to be
-    // initialized. If this function throws an exception, the value of the current
-    // object is indeterminate.
+    // initialized. If this function stores an error into `ctx` or throws an
+    // exception, the current value is indeterminate.
     void
     parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf);
 
@@ -634,14 +634,8 @@ static_assert(::std::is_nothrow_move_constructible<Value>::value, "");
 static_assert(::std::is_nothrow_move_assignable<Value>::value, "");
 
 }  // namespace taxon
-
-extern template
-class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
-
-extern template
-class ::rocket::cow_vector<::taxon::Value>;
-
-extern template
-class ::rocket::cow_hashmap<::rocket::prehashed_string,
+extern template class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
+extern template class ::rocket::cow_vector<::taxon::Value>;
+extern template class ::rocket::cow_hashmap<::rocket::prehashed_string,
   ::taxon::Value, ::rocket::prehashed_string::hash>;
 #endif
