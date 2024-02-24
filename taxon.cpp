@@ -46,6 +46,310 @@ do_check_global_locale() noexcept
   }
 
 void
+do_set_error(Parser_Context& ctx, const char* error)
+  {
+    ctx.error = error;
+  }
+
+bool
+do_is_digit(char c)
+  {
+    return static_cast<uint8_t>(c - '0') <= 9;
+  }
+
+void
+do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+    mbstate_t mbstate = { };
+    size_t cr;
+    char mb_seq[MB_LEN_MAX];
+    int ch;
+
+    if(tok_opt) {
+      // Move the current character from `ctx` to `*tok_opt`.
+      cr = ::std::c32rtomb(mb_seq, ctx.c, &mbstate);
+      ctx.c = UINT32_MAX;
+      if(static_cast<int>(cr) < 0)
+        return do_set_error(ctx, "invalid UTF character");
+
+      if(cr <= 1)
+        tok_opt->push_back(mb_seq[0]);
+      else
+        tok_opt->append(mb_seq, cr);
+    }
+
+    // Move the next character from `buf` to `ctx.c`.
+    ctx.c = UINT32_MAX;
+    ctx.offset = buf.tell();
+
+    ch = buf.getc();
+    if(ch == -1)
+      return do_set_error(ctx, "no more input data");
+
+  do_get_char32_loop_:
+    mb_seq[0] = static_cast<char>(ch);
+    cr = ::std::mbrtoc32(&(ctx.c), mb_seq, 1, &mbstate);
+    switch(static_cast<int>(cr))
+      {
+      case -3:
+        // UTF-32 is a fixed-length encoding, so this never happens.
+        ROCKET_ASSERT(false);
+
+      case -2:
+        // The input byte sequence is incomplete and has been consumed. Nothing
+        // has been written to `ctx.c`. Get another character and try again.
+        ch = buf.getc();
+        if(ch == -1)
+          return do_set_error(ctx, "incomplete multibyte character");
+        goto do_get_char32_loop_;
+
+      case -1:
+        // An invalid byte has been encountered. Nothing has been written to
+        // `ctx.c`. The input is invalid.
+        return do_set_error(ctx, "invalid multibyte character");
+      }
+  }
+
+struct utf_range
+  {
+    char32_t lo, hi;
+
+    constexpr utf_range(char32_t x) noexcept : lo(x), hi(x) { }
+    constexpr utf_range(char32_t x, char32_t y) noexcept : lo(x), hi(y) { }
+  };
+
+bool
+do_char_in(char32_t c, ::std::initializer_list<utf_range> range) noexcept
+  {
+    return ::rocket::any_of(range,
+        [=](utf_range r) { return (c >= r.lo) && (c <= r.hi);  });
+  }
+
+void
+do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+    token.clear();
+
+    if(ctx.c == UINT32_MAX)
+      do_mov_char(nullptr, ctx, buf);
+
+    while((ctx.c == '\t') || (ctx.c == '\n') || (ctx.c == '\r') || (ctx.c == ' '))
+      do_mov_char(nullptr, ctx, buf);
+
+    if(ctx.error)
+      return;
+
+    switch(ctx.c)
+      {
+      case '+':  // extension
+      case '-':
+      case '0' ... '9':
+        {
+          // sign?
+          if(do_char_in(ctx.c, { '+', '-' }))
+            do_mov_char(&token, ctx, buf);
+
+          // integer
+          if(ctx.c == '0')
+            do_mov_char(&token, ctx, buf);
+          else
+            while(do_char_in(ctx.c, { {'0','9'} }))
+              do_mov_char(&token, ctx, buf);
+
+          if(!do_is_digit(token.back()))
+            return do_set_error(ctx, "invalid number");
+
+          // fraction?
+          if(ctx.c == '.') {
+            do_mov_char(&token, ctx, buf);
+
+            while(do_char_in(ctx.c, { {'0','9'} }))
+              do_mov_char(&token, ctx, buf);
+
+            if(!do_is_digit(token.back()))
+              return do_set_error(ctx, "invalid fraction");
+          }
+
+          // exponent?
+          if(do_char_in(ctx.c, { 'e', 'E' })) {
+            do_mov_char(&token, ctx, buf);
+
+            if(do_char_in(ctx.c, { '+', '-' }))
+              do_mov_char(&token, ctx, buf);
+
+            while(do_char_in(ctx.c, { {'0','9'} }))
+              do_mov_char(&token, ctx, buf);
+
+            if(!do_is_digit(token.back()))
+              return do_set_error(ctx, "invalid exponent");
+          }
+        }
+        break;
+
+      case '"':
+        {
+          // string
+          do_mov_char(&token, ctx, buf);
+
+          while(ctx.c != '"') {
+            if(ctx.c == UINT32_MAX)
+              return do_set_error(ctx, "unterminated string");
+
+            if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
+              return do_set_error(ctx, "invalid character in string");
+
+            if(ctx.c == '\\') {
+              // Unescape the sequence and store it into `ctx.c`.
+              do_mov_char(nullptr, ctx, buf);
+              switch(ctx.c)
+                {
+                case '"':
+                case '\\':
+                case '/':
+                  break;
+
+                case 'b':
+                  ctx.c = '\b';
+                  break;
+
+                case 'f':
+                  ctx.c = '\f';
+                  break;
+
+                case 'n':
+                  ctx.c = '\n';
+                  break;
+
+                case 'r':
+                  ctx.c = '\r';
+                  break;
+
+                case 't':
+                  ctx.c = '\t';
+                  break;
+
+                case 'u':
+                  {
+                    char32_t utf_hi = 0;
+                    char32_t utf_lo = 0;
+
+                    // Get a UTF-32 character, which may be either a non-surrogate
+                    // UTF-16 code unit, or a surrogate pair. Leading surrogates are
+                    // within ['\uD800','\uDBFF'] and trailing surrogates are within
+                    // ['\uDC00','\uDFFF'].
+                    for(uint32_t t = 0;  t != 4;  ++t) {
+                      utf_hi <<= 4;
+                      do_mov_char(nullptr, ctx, buf);
+                      switch(ctx.c)
+                        {
+                        case '0' ... '9':
+                          utf_hi |= ctx.c - '0';
+                          break;
+
+                        case 'A' ... 'F':
+                        case 'a' ... 'f':
+                          utf_hi |= (ctx.c | 0x20) - 'a' + 10;
+                          break;
+
+                        default:
+                          return do_set_error(ctx, "invalid hexadecimal digit");
+                        }
+                    }
+
+                    if((utf_hi < 0xD800) || (utf_hi > 0xDFFF)) {
+                      ctx.c = utf_hi;
+                      break;
+                    }
+
+                    if(utf_hi > 0xDBFF)
+                      return do_set_error(ctx, "dangling trailing surrogate");
+
+                    // Expect an immediate `\u` sequence for the trailing surrogate.
+                    do_mov_char(nullptr, ctx, buf);
+                    if(ctx.c != '\\')
+                      return do_set_error(ctx, "missing trailing surrogate");
+
+                    do_mov_char(nullptr, ctx, buf);
+                    if(ctx.c != 'u')
+                      return do_set_error(ctx, "missing trailing surrogate");
+
+                    // Get the trailing surrogate.
+                    for(uint32_t t = 0;  t != 4;  ++t) {
+                      utf_lo <<= 4;
+                      do_mov_char(nullptr, ctx, buf);
+                      switch(ctx.c)
+                        {
+                        case '0' ... '9':
+                          utf_lo |= ctx.c - '0';
+                          break;
+
+                        case 'A' ... 'F':
+                        case 'a' ... 'f':
+                          utf_lo |= (ctx.c | 0x20) - 'a' + 10;
+                          break;
+
+                        default:
+                          return do_set_error(ctx, "invalid hexadecimal digit");
+                        }
+                    }
+
+                    if((utf_lo < 0xDC00) || (utf_lo > 0xDFFF))
+                      return do_set_error(ctx, "dangling leading surrogate");
+
+                    ctx.c = 0x10000 + ((utf_hi - 0xD800) << 10) + (utf_lo - 0xDC00);
+                    break;
+                  }
+
+                default:
+                  return do_set_error(ctx, "invalid escape sequence");
+                }
+            }
+
+            // Copy `ctx.c`.
+            do_mov_char(&token, ctx, buf);
+            continue;
+          }
+
+          // Drop the terminating quotation mark for simplicity. Do not attempt to
+          // get the next character, as some of these tokens may terminate the input,
+          // and the stream may be blocking but we can't really know whether there
+          // are more data.
+          ctx.c = UINT32_MAX;
+        }
+        break;
+
+      case '_':
+      case 'a' ... 'z':
+      case 'A' ... 'Z':
+        {
+          // identifier
+          while(do_char_in(ctx.c, { '_', {'0','9'}, {'A','Z'}, {'a','z'} }))
+            do_mov_char(&token, ctx, buf);
+        }
+        break;
+
+      case '[':
+      case ',':
+      case ']':
+      case '{':
+      case ':':
+      case '}':
+        {
+          // Take each of these characters as a single token. Do not attempt to get
+          // the next character, as some of these tokens may terminate the input,
+          // and the stream may be blocking but we can't really know whether there
+          // are more data.
+          token.push_back(static_cast<char>(ctx.c));
+          ctx.c = UINT32_MAX;
+        }
+        break;
+
+      default:
+        return do_set_error(ctx, "invalid character");
+      }
+  }
+
+void
 do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
   {
     const char* bptr = str.c_str();
@@ -186,8 +490,288 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-;
+    do_check_global_locale();
+
+    // Initialize parser states.
+    ctx.c = UINT32_MAX;
+    ctx.offset = -1;
+    ctx.error = nullptr;
+
+    // Break deep recursion with a handwritten stack.
+    struct xFrame
+      {
+        char closure;
+        V_array vsa;
+        V_object vso;
+        ::rocket::prehashed_string keyo;
+      };
+
+    ::rocket::cow_vector<xFrame> stack;
+    ::rocket::cow_string token;
+    ::rocket::ascii_numget numg;
+    ::std::pair<V_object::iterator, bool> insert_result;
+
+  do_pack_loop_:
+    do_get_token(token, ctx, buf);
+
+    if(!stack.empty() && (stack.back().closure == '}')) {
+      // We are inside an object, so this token must be a key string, followed by
+      // a colon, followed by its value.
+      if(token[0] != '"')
+        return do_set_error(ctx, "missing key string");
+
+      stack.mut_back().keyo = token.substr(1);
+      if(stack.back().vso.count(stack.back().keyo) != 0)
+        return do_set_error(ctx, "duplicate key");
+
+      do_get_token(token, ctx, buf);
+      if(token[0] != ':')
+        return do_set_error(ctx, "missing colon");
+
+      do_get_token(token, ctx, buf);
+    }
+
+    if(token.empty())
+      return;
+
+    if(token == "null") {
+      // 'null'
+      this->m_stor.emplace<V_null>();
+    }
+    else if(token == "true") {
+      // 'true'
+      this->m_stor.emplace<V_boolean>(true);
+    }
+    else if(token == "false") {
+      // 'false'
+      this->m_stor.emplace<V_boolean>(false);
+    }
+    else if(token == "[") {
+      // open
+      auto& frm = stack.emplace_back();
+      frm.closure = ']';
+      goto do_pack_loop_;
+    }
+    else if(token == "{") {
+      // open
+      auto& frm = stack.emplace_back();
+      frm.closure = '}';
+      goto do_pack_loop_;
+    }
+    else if((token[0] == '+') || (token[0] == '-') || do_is_digit(token[0])) {
+      // number
+      numg.parse_DD(token.data(), token.size());
+      numg.cast_D(this->m_stor.emplace<V_number>(), -DBL_MAX, DBL_MAX);
+      if(numg.overflowed())
+        return do_set_error(ctx, "number out of range");
+    }
+    else if((token[0] == '"') && (token[1] != '$')) {
+      // plain string
+      this->m_stor.emplace<V_string>(token.data() + 1, token.size() - 1);
+    }
+    else if((token[0] == '"') && (token[1] == '$')) {
+      // annotated string
+      if((token.size() < 4) || (token[3] != ':'))
+        return do_set_error(ctx, "invalid type annotator");
+
+      const char* bptr = token.c_str() + 4;
+      const char* const eptr = token.c_str() + token.length();
+      size_t tlen = token.length() - 4;
+
+      switch(token[2])
+        {
+        case 'l':
+          {
+            // 64-bit integer
+            if(numg.parse_I(bptr, tlen) != tlen)
+              return do_set_error(ctx, "invalid 64-bit integer");
+
+            numg.cast_I(this->m_stor.emplace<V_integer>(), INT64_MIN, INT64_MAX);
+            if(numg.overflowed())
+              return do_set_error(ctx, "64-bit integer out of range");
+          }
+          break;
+
+        case 'd':
+          {
+            // double-precision number
+            if(numg.parse_D(bptr, tlen) != tlen)
+              return do_set_error(ctx, "invalid double-precision number");
+
+            // Values that are out of range are converted to infinities and
+            // are always accepted.
+            numg.cast_D(this->m_stor.emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
+          }
+          break;
+
+        case 's':
+          {
+            // string
+            this->m_stor.emplace<V_string>(bptr, tlen);
+          }
+          break;
+
+        case 'h':
+          {
+            // hex
+            if(tlen / 2 * 2 != tlen)
+              return do_set_error(ctx, "invalid hexadecimal string");
+
+            auto& bin = this->m_stor.emplace<V_binary>();
+            bin.reserve(tlen / 2);
+
+            while(bptr != eptr) {
+              uint32_t word = 0;
+
+              for(uint32_t t = 0;  t != 2;  ++t) {
+                word <<= 4;
+                uint32_t ch = static_cast<uint8_t>(*bptr);
+                bptr ++;
+
+                switch(ch)
+                  {
+                  case '0' ... '9':
+                    word |= ch - '0';
+                    break;
+
+                  case 'A' ... 'F':
+                  case 'a' ... 'f':
+                    word |= (ch | 0x20) - 'a' + 10;
+                    break;
+
+                  default:
+                    return do_set_error(ctx, "invalid hexadecimal digit");
+                  }
+              }
+
+              bin.push_back(static_cast<unsigned char>(word));
+            }
+          }
+          break;
+
+        case 'b':
+          {
+            // base64
+            if(tlen / 4 * 4 != tlen)
+              return do_set_error(ctx, "invalid base64 string");
+
+            auto& bin = this->m_stor.emplace<V_binary>();
+            bin.reserve(tlen / 4 * 3);
+
+            while(bptr != eptr) {
+              uint32_t word = 0;
+              uint32_t ndigits = 4;
+
+              for(uint32_t t = 0;  t != 4;  ++t) {
+                word <<= 6;
+                uint32_t ch = static_cast<uint8_t>(*bptr);
+                bptr ++;
+
+                // A padding character may only occur at subscript 2 or 3. If the
+                // character at subscript 2 is a padding character, the character on
+                // subscript 3 must also be.
+                if((t <= 1) && (ch == '='))
+                  return do_set_error(ctx, "invalid base64 string");
+
+                if((ndigits != 4) && (ch != '='))
+                  return do_set_error(ctx, "invalid base64 string");
+
+                switch(ch)
+                  {
+                  case 'A' ... 'Z':
+                    word |= ch - 'A';
+                    break;
+
+                  case 'a' ... 'z':
+                    word |= ch - 'a' + 26;
+                    break;
+
+                  case '0' ... '9':
+                    word |= ch - '0' + 52;
+                    break;
+
+                  case '+':
+                    word |= 62;
+                    break;
+
+                  case '/':
+                    word |= 63;
+                    break;
+
+                  case '=':
+                    ndigits --;
+                    break;
+
+                  default:
+                    return do_set_error(ctx, "invalid base64 string");
+                  }
+              }
+
+              for(uint32_t t = 0;  t != ndigits - 1;  ++t) {
+                bin.push_back(static_cast<unsigned char>(word >> 16));
+                word <<= 8;
+              }
+            }
+          }
+          break;
+
+        case 't':
+          {
+            // timestamp in milliseconds
+            if(numg.parse_I(bptr, tlen) != tlen)
+              return do_set_error(ctx, "invalid timestamp");
+
+            // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
+            // '9999-12-31T23:59:59.000Z'.
+            ::std::int64_t count;
+            numg.cast_I(count, -2208988800000, 253402300799999);
+            this->m_stor.emplace<V_time>(::std::chrono::milliseconds(count));
+            if(numg.overflowed())
+              return do_set_error(ctx, "timestamp out of range");
+          }
+          break;
+
+        default:
+          return do_set_error(ctx, "unknown type annotator");
+        }
+    }
+    else
+      return do_set_error(ctx, "invalid token");
+
+    while(!stack.empty()) {
+      auto& frm = stack.mut_back();
+      switch(frm.closure)
+        {
+        case ']':
+          frm.vsa.emplace_back().m_stor = ::std::move(this->m_stor);
+          this->m_stor = frm.vsa;
+          break;
+
+        case '}':
+          ROCKET_ASSERT(!frm.keyo.empty());
+          insert_result = frm.vso.try_emplace(::std::move(frm.keyo));
+          ROCKET_ASSERT(insert_result.second);
+          insert_result.first->second.m_stor = ::std::move(this->m_stor);
+          this->m_stor = frm.vso;
+          break;
+
+        default:
+          ROCKET_UNREACHABLE();
+        }
+
+      do_get_token(token, ctx, buf);
+      if(token.empty())
+        return;
+
+      if(token == ",")
+        goto do_pack_loop_;
+
+      if((token.size() != 1) || (token[0] != frm.closure))
+        return do_set_error(ctx, "unexpected token");
+
+      // close
+      stack.pop_back();
+    }
   }
 
 void

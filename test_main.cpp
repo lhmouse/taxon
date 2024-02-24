@@ -246,6 +246,61 @@ main(void)
       assert(val.print_to_string() == R"(["$s:$meow",{"x":true},12.5,["$l:37",null]])");
     }
 
+    {
+      ::taxon::Value val;
+      assert(!val.parse(&""));
+      assert(!val.parse(&"  \t\r\n\t\n\t\r\t"));
+      assert(!val.parse(&R"({"a":1,"a":1})"));
+    }
+
+    {
+      static constexpr char source[] = R"({"A":"$b:aWVnaHUzQWhndWVqNGVvSg==","B":"$t:987654321"})";
+      ::taxon::Value val;
+      assert(val.parse(&source));
+      assert(val.is_object());
+      assert(val.as_object().at(&"A").is_binary());
+      assert(val.as_object().at(&"A").as_binary_size() == 16);
+      assert(val.as_object().at(&"A").as_binary_size() == 16);
+      assert(::std::memcmp(val.as_object().at(&"A").as_binary_data(), "ieghu3Ahguej4eoJ", 17) == 0);
+      assert(val.as_object().at(&"B").is_time());
+      assert(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
+                 val.as_object().at(&"B").as_time()).time_since_epoch().count() == 987654321);
+    }
+
+    {
+      static constexpr char source[] = R"([ "$h:414345", true	, "$d:-inf",{"y"	:1.5},[1,"\u732b"]])";
+      ::taxon::Value val;
+      assert(val.parse(&source));
+      assert(val.is_array());
+      assert(val.as_array().size() == 5);
+      assert(val.as_array().at(0).is_binary());
+      assert(val.as_array().at(0).as_binary_size() == 3);
+      assert(::std::memcmp(val.as_array().at(0).as_binary_data(), "ACE", 4) == 0);
+      assert(val.as_array().at(1).is_boolean());
+      assert(val.as_array().at(1).as_boolean() == true);
+      assert(val.as_array().at(2).is_number());
+      assert(val.as_array().at(2).as_number() == -::std::numeric_limits<double>::infinity());
+      assert(val.as_array().at(3).is_object());
+      assert(val.as_array().at(3).as_object_size() == 1);
+      assert(val.as_array().at(3).as_object().at(&"y").is_number());
+      assert(val.as_array().at(3).as_object().at(&"y").as_number() == 1.5);
+      assert(val.as_array().at(4).is_array());
+      assert(val.as_array().at(4).as_array_size() == 2);
+      assert(val.as_array().at(4).as_array().at(0).is_number());
+      assert(val.as_array().at(4).as_array().at(0).as_number() == 1);
+      assert(val.as_array().at(4).as_array().at(1).is_string());
+      assert(val.as_array().at(4).as_array().at(1).as_string() == "猫");
+    }
+
+    {
+      static constexpr char source[] = R"("T\b\f\n\r\t\"\\\/\ud83d\ude02😂")";
+      ::taxon::Value val;
+      assert(val.parse(&source));
+      assert(val.is_string());
+      assert(val.as_string_length() == 17);
+      assert(::std::memcmp(val.as_string_c_str(), "T\b\f\n\r\t\"\\/😂😂", 18) == 0);
+    }
+
     // leak check
     assert(::alloc_count == 0);
   }
