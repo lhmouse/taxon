@@ -132,6 +132,14 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
     }
   }
 
+bool
+do_use_hex_for(const ::rocket::cow_bstring& bin)
+  {
+    return (bin.size() == 1) || (bin.size() == 2) || (bin.size() == 4)
+           || (bin.size() == 8) || (bin.size() == 12) || (bin.size() == 16)
+           || (bin.size() == 20) || (bin.size() == 28)|| (bin.size() == 32);
+  }
+
 void
 do_print_binary_in_hex(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
   {
@@ -171,14 +179,6 @@ do_get_base64_digit(::std::uint32_t word)
          : (word < 52) ? static_cast<char>('a' + word - 26)
          : (word < 62) ? static_cast<char>('0' + word - 52)
          : (word < 63) ? '+' : '/';
-  }
-
-bool
-do_use_hex_for(const ::rocket::cow_bstring& bin)
-  {
-    return (bin.size() == 1) || (bin.size() == 2) || (bin.size() == 4)
-           || (bin.size() == 8) || (bin.size() == 12) || (bin.size() == 16)
-           || (bin.size() == 20) || (bin.size() == 28)|| (bin.size() == 32);
   }
 
 void
