@@ -11,42 +11,8 @@
 #include <clocale>
 #include <cuchar>
 namespace taxon {
+namespace {
 
-Value::
-~Value()
-  {
-    // Break deep recursion with a handwritten stack.
-    struct xVariant : Variant  { };
-    ::rocket::cow_vector<xVariant> stack;
-
-  do_unpack_loop_:
-    try {
-      // Unpack arrays or objects.
-      auto psa = this->m_stor.mut_ptr<V_array>();
-      if(psa && psa->unique())
-        for(auto it = psa->mut_begin();  it != psa->end();  ++it)
-          stack.emplace_back().swap(it->m_stor);
-
-      auto pso = this->m_stor.mut_ptr<V_object>();
-      if(pso && pso->unique())
-        for(auto it = pso->mut_begin();  it != pso->end();  ++it)
-          stack.emplace_back().swap(it->second.m_stor);
-    }
-    catch(::std::exception& stdex) {
-      // Ignore this exception.
-      ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());
-    }
-
-    if(!stack.empty()) {
-      // Destroy the this value. This will not result in recursion.
-      ::rocket::destroy(&(this->m_stor));
-      ::rocket::construct(&(this->m_stor), static_cast<Variant&&>(stack.mut_back()));
-      stack.pop_back();
-      goto do_unpack_loop_;
-    }
-  }
-
-static
 void
 do_check_global_locale() noexcept
   {
@@ -65,58 +31,6 @@ do_check_global_locale() noexcept
           locale ? locale : "(no locale)");
   }
 
-void
-Value::
-parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
-  {
-// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
-;
-  }
-
-void
-Value::
-parse_with(Parser_Context& ctx, const ::rocket::cow_string& str)
-  {
-    ::rocket::tinybuf_str buf(str, ::rocket::tinybuf::open_read);
-    this->parse_with(ctx, buf);
-  }
-
-void
-Value::
-parse_with(Parser_Context& ctx, ::std::FILE* fp)
-  {
-    ::rocket::tinybuf_file buf(fp, nullptr);
-    this->parse_with(ctx, buf);
-  }
-
-bool
-Value::
-parse(::rocket::tinybuf& buf)
-  {
-    Parser_Context ctx;
-    this->parse_with(ctx, buf);
-    return !ctx.error;
-  }
-
-bool
-Value::
-parse(const ::rocket::cow_string& str)
-  {
-    Parser_Context ctx;
-    this->parse_with(ctx, str);
-    return !ctx.error;
-  }
-
-bool
-Value::
-parse(::std::FILE* fp)
-  {
-    Parser_Context ctx;
-    this->parse_with(ctx, fp);
-    return !ctx.error;
-  }
-
-static
 void
 do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
   {
@@ -218,7 +132,6 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
     }
   }
 
-static
 void
 do_print_binary_in_hex(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
   {
@@ -251,7 +164,6 @@ do_print_binary_in_hex(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
     }
   }
 
-static constexpr
 char
 do_get_base64_digit(::std::uint32_t word)
   {
@@ -261,7 +173,6 @@ do_get_base64_digit(::std::uint32_t word)
          : (word < 63) ? '+' : '/';
   }
 
-static
 bool
 do_use_hex_for(const ::rocket::cow_bstring& bin)
   {
@@ -270,7 +181,6 @@ do_use_hex_for(const ::rocket::cow_bstring& bin)
            || (bin.size() == 20) || (bin.size() == 28)|| (bin.size() == 32);
   }
 
-static
 void
 do_print_binary_in_base64(::rocket::tinybuf& buf, const ::rocket::cow_bstring& bin)
   {
@@ -308,6 +218,93 @@ do_print_binary_in_base64(::rocket::tinybuf& buf, const ::rocket::cow_bstring& b
       b64word[3] = '=';
       buf.putn(b64word, 4);
     }
+  }
+
+}  // namespace
+
+Value::
+~Value()
+  {
+    // Break deep recursion with a handwritten stack.
+    struct xVariant : Variant  { };
+    ::rocket::cow_vector<xVariant> stack;
+
+  do_unpack_loop_:
+    try {
+      // Unpack arrays or objects.
+      auto psa = this->m_stor.mut_ptr<V_array>();
+      if(psa && psa->unique())
+        for(auto it = psa->mut_begin();  it != psa->end();  ++it)
+          stack.emplace_back().swap(it->m_stor);
+
+      auto pso = this->m_stor.mut_ptr<V_object>();
+      if(pso && pso->unique())
+        for(auto it = pso->mut_begin();  it != pso->end();  ++it)
+          stack.emplace_back().swap(it->second.m_stor);
+    }
+    catch(::std::exception& stdex) {
+      // Ignore this exception.
+      ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());
+    }
+
+    if(!stack.empty()) {
+      // Destroy the this value. This will not result in recursion.
+      ::rocket::destroy(&(this->m_stor));
+      ::rocket::construct(&(this->m_stor), static_cast<Variant&&>(stack.mut_back()));
+      stack.pop_back();
+      goto do_unpack_loop_;
+    }
+  }
+
+void
+Value::
+parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+// TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+;
+  }
+
+void
+Value::
+parse_with(Parser_Context& ctx, const ::rocket::cow_string& str)
+  {
+    ::rocket::tinybuf_str buf(str, ::rocket::tinybuf::open_read);
+    this->parse_with(ctx, buf);
+  }
+
+void
+Value::
+parse_with(Parser_Context& ctx, ::std::FILE* fp)
+  {
+    ::rocket::tinybuf_file buf(fp, nullptr);
+    this->parse_with(ctx, buf);
+  }
+
+bool
+Value::
+parse(::rocket::tinybuf& buf)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, buf);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(const ::rocket::cow_string& str)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, str);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(::std::FILE* fp)
+  {
+    Parser_Context ctx;
+    this->parse_with(ctx, fp);
+    return !ctx.error;
   }
 
 void
