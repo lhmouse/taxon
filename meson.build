@@ -59,7 +59,7 @@ add_project_arguments(
     language: [ 'c', 'cpp' ])
 
 add_project_arguments(
-    '-std=c++14', '-fno-elide-constructors', '-fvisibility-inlines-hidden',
+    '-std=c++17', '-fno-elide-constructors', '-fvisibility-inlines-hidden',
     '-fnothrow-opt', '-fno-enforce-eh-specs', '-Wzero-as-null-pointer-constant',
     '-Wno-redundant-move', '-Werror=non-virtual-dtor',
     language: 'cpp')
