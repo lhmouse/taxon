@@ -141,7 +141,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
           // passed the entire string, it must be invalid. Consume all bytes but
           // print a replacement character.
           bptr = eptr;
-          c16 = u'\uFFFD';
+          c16 = 0xFFFD;
           break;
 
         case -1:
@@ -150,7 +150,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
           // but print a replacement character.
           mbstate = { };
           bptr ++;
-          c16 = u'\uFFFD';
+          c16 = 0xFFFD;
           break;
 
         case 0:
@@ -166,35 +166,35 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
 
       switch(c16)
         {
-        case u'\b':
+        case '\b':
           // `\b`; backspace
           buf.putn("\\b", 2);
           break;
 
-        case u'\f':
+        case '\f':
           // `\f`; form feed
           buf.putn("\\f", 2);
           break;
 
-        case u'\n':
+        case '\n':
           // `\n`; line feed
           buf.putn("\\n", 2);
           break;
 
-        case u'\r':
+        case '\r':
           // `\r`; carrige return
           buf.putn("\\r", 2);
           break;
 
-        case u'\t':
+        case '\t':
           // `\t`; horizontal tab
           buf.putn("\\t", 2);
           break;
 
-        case u'\u0020' ... u'\u007E':
+        case 0x20 ... 0x7E:
           {
             // ASCII printable
-            if((c16 == u'"') || (c16 == u'\\') || (c16 == u'/')) {
+            if((c16 == '"') || (c16 == '\\') || (c16 == '/')) {
               char esc_seq[4] = "\\";
               esc_seq[1] = static_cast<char>(c16);
               buf.putn(esc_seq, 2);
