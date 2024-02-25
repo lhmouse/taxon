@@ -13,6 +13,7 @@
 #include <chrono>
 namespace taxon {
 
+enum Options : uint32_t;
 struct Parser_Context;
 class Value;
 
@@ -29,28 +30,46 @@ using V_string  = ::rocket::cow_string;
 using V_binary  = ::rocket::cow_bstring;
 using V_time    = ::std::chrono::system_clock::time_point;
 
-// Expand a sequence of alternatives without a trailing comma. This macro is part of
-// the ABI.
+// Expand a sequence of alternatives without a trailing comma. This macro is part
+// of the ABI.
 #define TAXON_GENERATOR_IEZUVAH3_(U)  \
-    /*  0 */  U##_null  \
-    /*  1 */, U##_array  \
-    /*  2 */, U##_object  \
-    /*  3 */, U##_boolean  \
-    /*  4 */, U##_integer  \
-    /*  5 */, U##_number  \
-    /*  6 */, U##_string  \
-    /*  7 */, U##_binary  \
-    /*  8 */, U##_time
+  /*  0 */ U##_null,  \
+  /*  1 */ U##_array,  \
+  /*  2 */ U##_object,  \
+  /*  3 */ U##_boolean,  \
+  /*  4 */ U##_integer,  \
+  /*  5 */ U##_number,  \
+  /*  6 */ U##_string,  \
+  /*  7 */ U##_binary,  \
+  /*  8 */ U##_time
 
 // Define type enumerators such as `t_null`, `t_array`, `t_number`, and so on.
 enum Type : ::std::uint8_t {TAXON_GENERATOR_IEZUVAH3_(t)};
 using Variant = ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(V)>;
 
+// This value controls the behavior of both the parser and the formatter. Multiple
+// options may combined with bitwise OR.
+enum Options : uint32_t
+  {
+    options_default = 0,
+
+    // Runs in JSON mode. The parser will not attempt to parse type annotators but
+    // leave them as plain strings. The formatter will output any value which would
+    // otherwise require annotation as an explicit null.
+    option_json_mode = 0b00000001,
+
+    // Encodes binary data always in base64 and never in hex. This option has no
+    // effect on the parser which always accepts either.
+    option_bin_as_base64 = 0b00000010,
+  };
+
+ROCKET_DEFINE_ENUM_OPERATORS(Options)
+
 // This structure provides storage for all parser states. Some of these fields are
 // for internal use. This structure need not be initialized before `parse()`.
 struct Parser_Context
   {
-    // stream offset of the next operation
+    // stream offset of the last token
     ::std::int64_t offset;
 
     // if no error, a null pointer; otherwise, a static string about the error
@@ -572,43 +591,43 @@ class Value
     // initialized. If this function stores an error into `ctx` or throws an
     // exception, the current value is indeterminate.
     void
-    parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf);
+    parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts = options_default);
 
     void
-    parse_with(Parser_Context& ctx, const ::rocket::cow_string& str);
+    parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts = options_default);
 
     void
-    parse_with(Parser_Context& ctx, ::std::FILE* fp);
+    parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts = options_default);
 
     bool
-    parse(::rocket::tinybuf& buf);
+    parse(::rocket::tinybuf& buf, Options opts = options_default);
 
     bool
-    parse(const ::rocket::cow_string& str);
+    parse(const ::rocket::cow_string& str, Options opts = options_default);
 
     bool
-    parse(::std::FILE* fp);
+    parse(::std::FILE* fp, Options opts = options_default);
 
     // Print this value. Invalid values are sanitized so they may become garbage or
     // null, but the entire output will always be valid TAXON. This function should
     // not throw exceptions on invalid inputs; only in case of an I/O error or
-    // failure to allocate memory. A byte string of length 1, 2, 4, 8, 12, 16, 20,
-    // 28 or 32 is encoded in hex and a byte string of any other length is encoded
-    // in base64.
+    // failure to allocate memory. A byte string of length 1, 2, 3, 4, 8, 12, 16,
+    // 20, 24, 28 or 32 is encoded in hex and a byte string of any other length is
+    // encoded in base64.
     void
-    print_to(::rocket::tinybuf& buf) const;
+    print_to(::rocket::tinybuf& buf, Options opts = options_default) const;
 
     void
-    print_to(::rocket::cow_string& str) const;
+    print_to(::rocket::cow_string& str, Options opts = options_default) const;
 
     void
-    print_to(::std::FILE* fp) const;
+    print_to(::std::FILE* fp, Options opts = options_default) const;
 
     ::rocket::cow_string
-    print_to_string() const;
+    print_to_string(Options opts = options_default) const;
 
     void
-    print_to_stderr() const;
+    print_to_stderr(Options opts = options_default) const;
   };
 
 inline

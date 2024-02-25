@@ -363,7 +363,7 @@ void
 do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
   {
     const char* bptr = str.c_str();
-    const char* const eptr = str.c_str() + str.length();
+    const char* const eptr = bptr + str.length();
 
     mbstate_t mbstate = { };
     char16_t c16;
@@ -498,7 +498,7 @@ Value::
 
 void
 Value::
-parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
+parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
     do_check_global_locale();
 
@@ -609,7 +609,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
         break;
 
       case '"':
-        if(token[1] != '$') {
+        if((opts & option_json_mode) || (token[1] != '$')) {
           // plain string
           this->m_stor.emplace<V_string>(token.data() + 1, token.size() - 1);
         }
@@ -619,8 +619,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
             return do_set_error(ctx, "invalid type annotator");
 
           const char* bptr = token.c_str() + 4;
-          const char* const eptr = token.c_str() + token.length();
           size_t tlen = token.length() - 4;
+          const char* const eptr = bptr + tlen;
 
           switch(token[2])
             {
@@ -711,9 +711,9 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
                     uint32_t ch = static_cast<uint8_t>(*bptr);
                     bptr ++;
 
-                    // A padding character may only occur at subscript 2 or 3. If the
-                    // character at subscript 2 is a padding character, the character on
-                    // subscript 3 must also be.
+                    // A padding character may only occur at subscript 2 or 3. If
+                    // the character at subscript 2 is a padding character, the
+                    // character on subscript 3 must also be.
                     if((t <= 1) && (ch == '='))
                       return do_set_error(ctx, "invalid base64 string");
 
@@ -823,50 +823,50 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
 
 void
 Value::
-parse_with(Parser_Context& ctx, const ::rocket::cow_string& str)
+parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
   {
     ::rocket::tinybuf_str buf(str, ::rocket::tinybuf::open_read);
-    this->parse_with(ctx, buf);
+    this->parse_with(ctx, buf, opts);
   }
 
 void
 Value::
-parse_with(Parser_Context& ctx, ::std::FILE* fp)
+parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
   {
     ::rocket::tinybuf_file buf(fp, nullptr);
-    this->parse_with(ctx, buf);
+    this->parse_with(ctx, buf, opts);
   }
 
 bool
 Value::
-parse(::rocket::tinybuf& buf)
+parse(::rocket::tinybuf& buf, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, buf);
+    this->parse_with(ctx, buf, opts);
     return !ctx.error;
   }
 
 bool
 Value::
-parse(const ::rocket::cow_string& str)
+parse(const ::rocket::cow_string& str, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, str);
+    this->parse_with(ctx, str, opts);
     return !ctx.error;
   }
 
 bool
 Value::
-parse(::std::FILE* fp)
+parse(::std::FILE* fp, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, fp);
+    this->parse_with(ctx, fp, opts);
     return !ctx.error;
   }
 
 void
 Value::
-print_to(::rocket::tinybuf& buf) const
+print_to(::rocket::tinybuf& buf, Options opts) const
   {
     do_check_global_locale();
 
@@ -927,10 +927,18 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_integer:
-        nump.put_DI(pstor->as<V_integer>());
-        buf.putn("\"$l:", 4);
-        buf.putn(nump.data(), nump.size());
-        buf.putc('\"');
+        if(opts & option_json_mode) {
+          // as floating-point number; inaccurate for large values
+          nump.put_DD(static_cast<V_number>(pstor->as<V_integer>()));
+          buf.putn(nump.data(), nump.size());
+        }
+        else {
+          // precise; annotated
+          nump.put_DI(pstor->as<V_integer>());
+          buf.putn("\"$l:", 4);
+          buf.putn(nump.data(), nump.size());
+          buf.putc('\"');
+        }
         break;
 
       case t_number:
@@ -938,6 +946,10 @@ print_to(::rocket::tinybuf& buf) const
           // finite; unquoted
           nump.put_DD(pstor->as<V_number>());
           buf.putn(nump.data(), nump.size());
+        }
+        else if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
         }
         else {
           // non-finite; annotated
@@ -949,7 +961,7 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_string:
-        if(pstor->as<V_string>()[0] != '$') {
+        if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
           // general; quoted
           buf.putc('\"');
           do_print_utf8_string_unquoted(buf, pstor->as<V_string>());
@@ -964,13 +976,24 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_binary:
-        {
-          const auto& bin = pstor->as<V_binary>();
-          const unsigned char* bptr = bin.data();
-          const unsigned char* const eptr = bin.data() + bin.size();
+        if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
+        }
+        else {
+          // annotated
+          const unsigned char* bptr = pstor->as<V_binary>().data();
+          const unsigned char* const eptr = bptr + pstor->as<V_binary>().size();
 
-          constexpr uint8_t hex_sizes[] = { 1, 2, 4, 8, 12, 16, 20, 28, 32 };
-          if(::rocket::is_any_of(bin.size(), hex_sizes)) {
+          bool use_hex = true;
+          if(opts & option_bin_as_base64)
+            use_hex = false;
+          else
+            use_hex = (pstor->as<V_binary>().size() <= 4)  // small
+                      || ((pstor->as<V_binary>().size() % 4 == 0)
+                          && (pstor->as<V_binary>().size() / 4 <= 8));
+
+          if(use_hex) {
             // hex
             buf.putn("\"$h:", 4);
 
@@ -1075,11 +1098,18 @@ print_to(::rocket::tinybuf& buf) const
         break;
 
       case t_time:
-        nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
-                                     pstor->as<V_time>()).time_since_epoch().count());
-        buf.putn("\"$t:", 4);
-        buf.putn(nump.data(), nump.size());
-        buf.putc('\"');
+        if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
+        }
+        else {
+          // annotated
+          nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
+                                       pstor->as<V_time>()).time_since_epoch().count());
+          buf.putn("\"$t:", 4);
+          buf.putn(nump.data(), nump.size());
+          buf.putc('\"');
+        }
         break;
 
       default:
@@ -1124,36 +1154,36 @@ print_to(::rocket::tinybuf& buf) const
 
 void
 Value::
-print_to(::rocket::cow_string& str) const
+print_to(::rocket::cow_string& str, Options opts) const
   {
     ::rocket::tinybuf_str buf(::std::move(str), ::rocket::tinybuf::open_write);
-    this->print_to(buf);
+    this->print_to(buf, opts);
     str = buf.extract_string();
   }
 
 void
 Value::
-print_to(::std::FILE* fp) const
+print_to(::std::FILE* fp, Options opts) const
   {
     ::rocket::tinybuf_file buf(fp, nullptr);
-    this->print_to(buf);
+    this->print_to(buf, opts);
   }
 
 ::rocket::cow_string
 Value::
-print_to_string() const
+print_to_string(Options opts) const
   {
     ::rocket::tinybuf_str buf(::rocket::tinybuf::open_write);
-    this->print_to(buf);
+    this->print_to(buf, opts);
     return buf.extract_string();
   }
 
 void
 Value::
-print_to_stderr() const
+print_to_stderr(Options opts) const
   {
     ::rocket::tinybuf_file buf(stderr, nullptr);
-    this->print_to(buf);
+    this->print_to(buf, opts);
   }
 
 }  // namespace taxon
