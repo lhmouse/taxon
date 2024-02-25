@@ -5,6 +5,7 @@
 #include <new>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #undef NDEBUG
 #include <assert.h>
 
@@ -299,6 +300,73 @@ main(void)
       assert(val.is_string());
       assert(val.as_string_length() == 17);
       assert(::std::memcmp(val.as_string_c_str(), "T\b\f\n\r\t\"\\/😂😂", 18) == 0);
+    }
+
+    {
+      ::taxon::Value val;
+      ::taxon::Parser_Context ctx;
+
+      val.parse_with(ctx, &"(");
+      assert(::std::strcmp(ctx.error, "invalid character") == 0);
+
+      val.parse_with(ctx, &"[");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &"[1");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &"[1,");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &"[1,]");
+      assert(::std::strcmp(ctx.error, "invalid token") == 0);
+
+      val.parse_with(ctx, &"{");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &"{x");
+      assert(::std::strcmp(ctx.error, "missing key string") == 0);
+
+      val.parse_with(ctx, &"{true");
+      assert(::std::strcmp(ctx.error, "missing key string") == 0);
+
+      val.parse_with(ctx, &R"({"x)");
+      assert(::std::strcmp(ctx.error, "unterminated string") == 0);
+
+      val.parse_with(ctx, &R"({"x")");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &R"({"x"1)");
+      assert(::std::strcmp(ctx.error, "missing colon") == 0);
+
+      val.parse_with(ctx, &R"({"x":)");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &R"({"x":42)");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &R"({"x":42,)");
+      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+
+      val.parse_with(ctx, &R"({"x":42,})");
+      assert(::std::strcmp(ctx.error, "missing key string") == 0);
+    }
+
+    {
+      // recursion
+      ::taxon::Value val;
+      constexpr ::std::size_t N = 1000000;
+      for(::std::size_t i = 0; i < N; ++i) {
+        ::taxon::V_array arr;
+        arr.emplace_back(::std::move(val));
+        val = ::std::move(arr);
+      }
+
+      ::rocket::cow_string str;
+      str.append(N, '[');
+      str.append("null", 4);
+      str.append(N, ']');
+      assert(val.print_to_string() == str);
     }
 
     // leak check

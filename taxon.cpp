@@ -136,9 +136,6 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
     while((ctx.c == '\t') || (ctx.c == '\n') || (ctx.c == '\r') || (ctx.c == ' '))
       do_mov_char(nullptr, ctx, buf);
 
-    if(ctx.error)
-      return;
-
     switch(ctx.c)
       {
       case '+':  // extension
@@ -183,6 +180,11 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
             if(!do_is_digit(token.back()))
               return do_set_error(ctx, "invalid exponent");
           }
+
+          // If the end of input has been reached, `ctx.error` may be set. We will
+          // not return an error, so clear it.
+          ROCKET_ASSERT(!token.empty());
+          ctx.error = nullptr;
         }
         break;
 
@@ -325,6 +327,11 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
           // identifier
           while(do_char_in(ctx.c, { '_', {'0','9'}, {'A','Z'}, {'a','z'} }))
             do_mov_char(&token, ctx, buf);
+
+          // If the end of input has been reached, `ctx.error` may be set. We will
+          // not return an error, so clear it.
+          ROCKET_ASSERT(!token.empty());
+          ctx.error = nullptr;
         }
         break;
 
@@ -343,6 +350,9 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
           ctx.c = UINT32_MAX;
         }
         break;
+
+      case UINT32_MAX:
+        return do_set_error(ctx, "premature end of input");
 
       default:
         return do_set_error(ctx, "invalid character");
@@ -513,6 +523,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
 
   do_pack_loop_:
     do_get_token(token, ctx, buf);
+    if(ctx.error)
+      return;
 
     if(!stack.empty() && (stack.back().closure == '}')) {
       // We are inside an object, so this token must be a key string, followed by
@@ -520,223 +532,258 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
       if(token[0] != '"')
         return do_set_error(ctx, "missing key string");
 
-      stack.mut_back().keyo = token.substr(1);
+      // The key shall be unique.
+      stack.mut_back().keyo.assign(token.data() + 1, token.size() - 1);
       if(stack.back().vso.count(stack.back().keyo) != 0)
         return do_set_error(ctx, "duplicate key");
 
+      // Expect the colon separator between the key and value.
       do_get_token(token, ctx, buf);
+      if(ctx.error)
+        return;
+
       if(token[0] != ':')
         return do_set_error(ctx, "missing colon");
 
+      // Get the value.
       do_get_token(token, ctx, buf);
+      if(ctx.error)
+        return;
     }
 
-    if(token.empty())
-      return;
-
-    if(token == "null") {
-      // 'null'
-      this->m_stor.emplace<V_null>();
-    }
-    else if(token == "true") {
-      // 'true'
-      this->m_stor.emplace<V_boolean>(true);
-    }
-    else if(token == "false") {
-      // 'false'
-      this->m_stor.emplace<V_boolean>(false);
-    }
-    else if(token == "[") {
-      // open
-      auto& frm = stack.emplace_back();
-      frm.closure = ']';
-      goto do_pack_loop_;
-    }
-    else if(token == "{") {
-      // open
-      auto& frm = stack.emplace_back();
-      frm.closure = '}';
-      goto do_pack_loop_;
-    }
-    else if((token[0] == '+') || (token[0] == '-') || do_is_digit(token[0])) {
-      // number
-      numg.parse_DD(token.data(), token.size());
-      numg.cast_D(this->m_stor.emplace<V_number>(), -DBL_MAX, DBL_MAX);
-      if(numg.overflowed())
-        return do_set_error(ctx, "number out of range");
-    }
-    else if((token[0] == '"') && (token[1] != '$')) {
-      // plain string
-      this->m_stor.emplace<V_string>(token.data() + 1, token.size() - 1);
-    }
-    else if((token[0] == '"') && (token[1] == '$')) {
-      // annotated string
-      if((token.size() < 4) || (token[3] != ':'))
-        return do_set_error(ctx, "invalid type annotator");
-
-      const char* bptr = token.c_str() + 4;
-      const char* const eptr = token.c_str() + token.length();
-      size_t tlen = token.length() - 4;
-
-      switch(token[2])
+    switch(token[0])
+      {
+      case 'n':
         {
-        case 'l':
-          {
-            // 64-bit integer
-            if(numg.parse_I(bptr, tlen) != tlen)
-              return do_set_error(ctx, "invalid 64-bit integer");
-
-            numg.cast_I(this->m_stor.emplace<V_integer>(), INT64_MIN, INT64_MAX);
-            if(numg.overflowed())
-              return do_set_error(ctx, "64-bit integer out of range");
-          }
-          break;
-
-        case 'd':
-          {
-            // double-precision number
-            if(numg.parse_D(bptr, tlen) != tlen)
-              return do_set_error(ctx, "invalid double-precision number");
-
-            // Values that are out of range are converted to infinities and
-            // are always accepted.
-            numg.cast_D(this->m_stor.emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
-          }
-          break;
-
-        case 's':
-          {
-            // string
-            this->m_stor.emplace<V_string>(bptr, tlen);
-          }
-          break;
-
-        case 'h':
-          {
-            // hex
-            if(tlen / 2 * 2 != tlen)
-              return do_set_error(ctx, "invalid hexadecimal string");
-
-            auto& bin = this->m_stor.emplace<V_binary>();
-            bin.reserve(tlen / 2);
-
-            while(bptr != eptr) {
-              uint32_t word = 0;
-
-              for(uint32_t t = 0;  t != 2;  ++t) {
-                word <<= 4;
-                uint32_t ch = static_cast<uint8_t>(*bptr);
-                bptr ++;
-
-                switch(ch)
-                  {
-                  case '0' ... '9':
-                    word |= ch - '0';
-                    break;
-
-                  case 'A' ... 'F':
-                  case 'a' ... 'f':
-                    word |= (ch | 0x20) - 'a' + 10;
-                    break;
-
-                  default:
-                    return do_set_error(ctx, "invalid hexadecimal digit");
-                  }
-              }
-
-              bin.push_back(static_cast<unsigned char>(word));
-            }
-          }
-          break;
-
-        case 'b':
-          {
-            // base64
-            if(tlen / 4 * 4 != tlen)
-              return do_set_error(ctx, "invalid base64 string");
-
-            auto& bin = this->m_stor.emplace<V_binary>();
-            bin.reserve(tlen / 4 * 3);
-
-            while(bptr != eptr) {
-              uint32_t word = 0;
-              uint32_t ndigits = 4;
-
-              for(uint32_t t = 0;  t != 4;  ++t) {
-                word <<= 6;
-                uint32_t ch = static_cast<uint8_t>(*bptr);
-                bptr ++;
-
-                // A padding character may only occur at subscript 2 or 3. If the
-                // character at subscript 2 is a padding character, the character on
-                // subscript 3 must also be.
-                if((t <= 1) && (ch == '='))
-                  return do_set_error(ctx, "invalid base64 string");
-
-                if((ndigits != 4) && (ch != '='))
-                  return do_set_error(ctx, "invalid base64 string");
-
-                switch(ch)
-                  {
-                  case 'A' ... 'Z':
-                    word |= ch - 'A';
-                    break;
-
-                  case 'a' ... 'z':
-                    word |= ch - 'a' + 26;
-                    break;
-
-                  case '0' ... '9':
-                    word |= ch - '0' + 52;
-                    break;
-
-                  case '+':
-                    word |= 62;
-                    break;
-
-                  case '/':
-                    word |= 63;
-                    break;
-
-                  case '=':
-                    ndigits --;
-                    break;
-
-                  default:
-                    return do_set_error(ctx, "invalid base64 string");
-                  }
-              }
-
-              for(uint32_t t = 0;  t != ndigits - 1;  ++t) {
-                bin.push_back(static_cast<unsigned char>(word >> 16));
-                word <<= 8;
-              }
-            }
-          }
-          break;
-
-        case 't':
-          {
-            // timestamp in milliseconds
-            if(numg.parse_I(bptr, tlen) != tlen)
-              return do_set_error(ctx, "invalid timestamp");
-
-            // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
-            // '9999-12-31T23:59:59.000Z'.
-            ::std::int64_t count;
-            numg.cast_I(count, -2208988800000, 253402300799999);
-            this->m_stor.emplace<V_time>(::std::chrono::milliseconds(count));
-            if(numg.overflowed())
-              return do_set_error(ctx, "timestamp out of range");
-          }
-          break;
-
-        default:
-          return do_set_error(ctx, "unknown type annotator");
+          if(token == "null")
+            this->m_stor.emplace<V_null>();
+          else
+            return do_set_error(ctx, "invalid token");
         }
-    }
-    else
-      return do_set_error(ctx, "invalid token");
+        break;
+
+      case 't':
+        {
+          if(token == "true")
+            this->m_stor.emplace<V_boolean>(true);
+          else
+            return do_set_error(ctx, "invalid token");
+        }
+        break;
+
+      case 'f':
+        {
+          if(token == "false")
+            this->m_stor.emplace<V_boolean>(false);
+          else
+            return do_set_error(ctx, "invalid token");
+        }
+        break;
+
+      case '[':
+        {
+          // open
+          auto& frm = stack.emplace_back();
+          frm.closure = ']';
+          goto do_pack_loop_;
+        }
+
+      case '{':
+        {
+          // open
+          auto& frm = stack.emplace_back();
+          frm.closure = '}';
+          goto do_pack_loop_;
+        }
+
+      case '+':
+      case '-':
+      case '0' ... '9':
+        {
+          // number
+          numg.parse_DD(token.data(), token.size());
+          numg.cast_D(this->m_stor.emplace<V_number>(), -DBL_MAX, DBL_MAX);
+          if(numg.overflowed())
+            return do_set_error(ctx, "number out of range");
+        }
+        break;
+
+      case '"':
+        if(token[1] != '$') {
+          // plain string
+          this->m_stor.emplace<V_string>(token.data() + 1, token.size() - 1);
+        }
+        else {
+          // annotated string
+          if((token.size() < 4) || (token[3] != ':'))
+            return do_set_error(ctx, "invalid type annotator");
+
+          const char* bptr = token.c_str() + 4;
+          const char* const eptr = token.c_str() + token.length();
+          size_t tlen = token.length() - 4;
+
+          switch(token[2])
+            {
+            case 'l':
+              {
+                // 64-bit integer
+                if(numg.parse_I(bptr, tlen) != tlen)
+                  return do_set_error(ctx, "invalid 64-bit integer");
+
+                numg.cast_I(this->m_stor.emplace<V_integer>(), INT64_MIN, INT64_MAX);
+                if(numg.overflowed())
+                  return do_set_error(ctx, "64-bit integer out of range");
+              }
+              break;
+
+            case 'd':
+              {
+                // double-precision number
+                if(numg.parse_D(bptr, tlen) != tlen)
+                  return do_set_error(ctx, "invalid double-precision number");
+
+                // Values that are out of range are converted to infinities and
+                // are always accepted.
+                numg.cast_D(this->m_stor.emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
+              }
+              break;
+
+            case 's':
+              {
+                // string
+                this->m_stor.emplace<V_string>(bptr, tlen);
+              }
+              break;
+
+            case 'h':
+              {
+                // hex
+                if(tlen / 2 * 2 != tlen)
+                  return do_set_error(ctx, "invalid hexadecimal string");
+
+                auto& bin = this->m_stor.emplace<V_binary>();
+                bin.reserve(tlen / 2);
+
+                while(bptr != eptr) {
+                  uint32_t word = 0;
+
+                  for(uint32_t t = 0;  t != 2;  ++t) {
+                    word <<= 4;
+                    uint32_t ch = static_cast<uint8_t>(*bptr);
+                    bptr ++;
+
+                    switch(ch)
+                      {
+                      case '0' ... '9':
+                        word |= ch - '0';
+                        break;
+
+                      case 'A' ... 'F':
+                      case 'a' ... 'f':
+                        word |= (ch | 0x20) - 'a' + 10;
+                        break;
+
+                      default:
+                        return do_set_error(ctx, "invalid hexadecimal digit");
+                      }
+                  }
+
+                  bin.push_back(static_cast<unsigned char>(word));
+                }
+              }
+              break;
+
+            case 'b':
+              {
+                // base64
+                if(tlen / 4 * 4 != tlen)
+                  return do_set_error(ctx, "invalid base64 string");
+
+                auto& bin = this->m_stor.emplace<V_binary>();
+                bin.reserve(tlen / 4 * 3);
+
+                while(bptr != eptr) {
+                  uint32_t word = 0;
+                  uint32_t ndigits = 4;
+
+                  for(uint32_t t = 0;  t != 4;  ++t) {
+                    word <<= 6;
+                    uint32_t ch = static_cast<uint8_t>(*bptr);
+                    bptr ++;
+
+                    // A padding character may only occur at subscript 2 or 3. If the
+                    // character at subscript 2 is a padding character, the character on
+                    // subscript 3 must also be.
+                    if((t <= 1) && (ch == '='))
+                      return do_set_error(ctx, "invalid base64 string");
+
+                    if((ndigits != 4) && (ch != '='))
+                      return do_set_error(ctx, "invalid base64 string");
+
+                    switch(ch)
+                      {
+                      case 'A' ... 'Z':
+                        word |= ch - 'A';
+                        break;
+
+                      case 'a' ... 'z':
+                        word |= ch - 'a' + 26;
+                        break;
+
+                      case '0' ... '9':
+                        word |= ch - '0' + 52;
+                        break;
+
+                      case '+':
+                        word |= 62;
+                        break;
+
+                      case '/':
+                        word |= 63;
+                        break;
+
+                      case '=':
+                        ndigits --;
+                        break;
+
+                      default:
+                        return do_set_error(ctx, "invalid base64 string");
+                      }
+                  }
+
+                  for(uint32_t t = 0;  t != ndigits - 1;  ++t) {
+                    bin.push_back(static_cast<unsigned char>(word >> 16));
+                    word <<= 8;
+                  }
+                }
+              }
+              break;
+
+            case 't':
+              {
+                // timestamp in milliseconds
+                if(numg.parse_I(bptr, tlen) != tlen)
+                  return do_set_error(ctx, "invalid timestamp");
+
+                // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
+                // '9999-12-31T23:59:59.000Z'.
+                ::std::int64_t count;
+                numg.cast_I(count, -2208988800000, 253402300799999);
+                this->m_stor.emplace<V_time>(::std::chrono::milliseconds(count));
+                if(numg.overflowed())
+                  return do_set_error(ctx, "timestamp out of range");
+              }
+              break;
+
+            default:
+              return do_set_error(ctx, "unknown type annotator");
+            }
+        }
+        break;
+
+      default:
+        return do_set_error(ctx, "invalid token");
+      }
 
     while(!stack.empty()) {
       auto& frm = stack.mut_back();
@@ -760,7 +807,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf)
         }
 
       do_get_token(token, ctx, buf);
-      if(token.empty())
+      if(ctx.error)
         return;
 
       if(token == ",")
