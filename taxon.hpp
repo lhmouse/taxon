@@ -32,7 +32,7 @@ using V_time    = ::std::chrono::system_clock::time_point;
 
 // Expand a sequence of alternatives without a trailing comma. This macro is part
 // of the ABI.
-#define TAXON_GENERATOR_IEZUVAH3_(U)  \
+#define TAXON_TYPES_IEZUVAH3_(U)  \
   /*  0 */ U##_null,  \
   /*  1 */ U##_array,  \
   /*  2 */ U##_object,  \
@@ -44,8 +44,8 @@ using V_time    = ::std::chrono::system_clock::time_point;
   /*  8 */ U##_time
 
 // Define type enumerators such as `t_null`, `t_array`, `t_number`, and so on.
-enum Type : ::std::uint8_t {TAXON_GENERATOR_IEZUVAH3_(t)};
-using Variant = ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(V)>;
+enum Type : ::std::uint8_t {TAXON_TYPES_IEZUVAH3_(t)};
+using Variant = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
 
 // This value controls the behavior of both the parser and the formatter. Multiple
 // options may combined with bitwise OR.
@@ -654,7 +654,7 @@ static_assert(::std::is_nothrow_move_constructible<Value>::value, "");
 static_assert(::std::is_nothrow_move_assignable<Value>::value, "");
 
 }  // namespace taxon
-extern template class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
+extern template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 extern template class ::rocket::cow_vector<::taxon::Value>;
 extern template class ::rocket::cow_hashmap<::rocket::prehashed_string,
   ::taxon::Value, ::rocket::prehashed_string::hash>;

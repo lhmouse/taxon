@@ -12,7 +12,7 @@
 #include <climits>
 #include <cfloat>
 #include <cuchar>
-template class ::rocket::variant<TAXON_GENERATOR_IEZUVAH3_(::taxon::V)>;
+template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 template class ::rocket::cow_vector<::taxon::Value>;
 template class ::rocket::cow_hashmap<::rocket::prehashed_string,
   ::taxon::Value, ::rocket::prehashed_string::hash>;
