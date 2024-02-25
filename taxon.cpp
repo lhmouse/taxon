@@ -80,8 +80,7 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
 
     // Move the next character from `buf` to `ctx.c`.
     ctx.c = UINT32_MAX;
-    ctx.offset = buf.tell();
-
+    ctx.last_offset = buf.tell();
     ch = buf.getc();
     if(ch == -1)
       return do_set_error(ctx, "no more input data");
@@ -128,13 +127,15 @@ do_char_in(char32_t c, ::std::initializer_list<utf_range> range) noexcept
 void
 do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    token.clear();
-
     if(ctx.c == UINT32_MAX)
-      do_mov_char(nullptr, ctx, buf);
+      ctx.c = '\t';
 
     while((ctx.c == '\t') || (ctx.c == '\n') || (ctx.c == '\r') || (ctx.c == ' '))
       do_mov_char(nullptr, ctx, buf);
+
+    token.clear();
+    ctx.offset = ctx.last_offset;
+    ctx.error = nullptr;
 
     switch(ctx.c)
       {
@@ -519,38 +520,12 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     ::rocket::cow_vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
-    ::std::pair<V_object::iterator, bool> insert_result;
 
-  do_pack_loop_:
     do_get_token(token, ctx, buf);
     if(ctx.error)
       return;
 
-    if(!stack.empty() && (stack.back().closure == '}')) {
-      // We are inside an object, so this token must be a key string, followed by
-      // a colon, followed by its value.
-      if(token[0] != '"')
-        return do_set_error(ctx, "missing key string");
-
-      // The key shall be unique.
-      stack.mut_back().keyo.assign(token.data() + 1, token.size() - 1);
-      if(stack.back().vso.count(stack.back().keyo) != 0)
-        return do_set_error(ctx, "duplicate key");
-
-      // Expect the colon separator between the key and value.
-      do_get_token(token, ctx, buf);
-      if(ctx.error)
-        return;
-
-      if(token[0] != ':')
-        return do_set_error(ctx, "missing colon");
-
-      // Get the value.
-      do_get_token(token, ctx, buf);
-      if(ctx.error)
-        return;
-    }
-
+  do_pack_value_loop_:
     switch(token[0])
       {
       case 'n':
@@ -581,20 +556,62 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         break;
 
       case '[':
-        {
+        // array
+        do_get_token(token, ctx, buf);
+        if(token.empty())
+          return do_set_error(ctx, "unterminated array");
+
+        if(ctx.error)
+          return;
+
+        if(token != "]") {
           // open
           auto& frm = stack.emplace_back();
           frm.closure = ']';
-          goto do_pack_loop_;
+          goto do_pack_value_loop_;
         }
 
+        this->m_stor.emplace<V_array>();
+        break;
+
       case '{':
-        {
+        // object
+        do_get_token(token, ctx, buf);
+        if(token.empty())
+          return do_set_error(ctx, "unterminated object");
+
+        if(ctx.error)
+          return;
+
+        if(token != "}") {
+          // We are inside an object, so this token must be a key string, followed
+          // by a colon, followed by its value.
+          if(token[0] != '"')
+            return do_set_error(ctx, "missing key string");
+
+          ::rocket::prehashed_string keyo;
+          keyo.assign(token.data() + 1, token.size() - 1);
+
+          do_get_token(token, ctx, buf);
+          if(token != ":")
+            return do_set_error(ctx, "missing colon");
+
+          do_get_token(token, ctx, buf);
+          if(token.empty())
+            return do_set_error(ctx, "missing value");
+
+          if(ctx.error)
+            return;
+
           // open
           auto& frm = stack.emplace_back();
           frm.closure = '}';
-          goto do_pack_loop_;
+          frm.keyo = ::std::move(keyo);
+          goto do_pack_value_loop_;
         }
+
+        this->m_stor.emplace<V_object>();
+        break;
 
       case '+':
       case '-':
@@ -790,31 +807,86 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       switch(frm.closure)
         {
         case ']':
-          frm.vsa.emplace_back().m_stor = ::std::move(this->m_stor);
-          this->m_stor = frm.vsa;
+          {
+            // Move the last value into this array.
+            frm.vsa.emplace_back().m_stor.swap(this->m_stor);
+
+            ROCKET_ASSERT(this->m_stor.index() == 0);
+            this->m_stor = frm.vsa;
+
+            do_get_token(token, ctx, buf);
+            if(token.empty())
+              return do_set_error(ctx, "unterminated array");
+
+            if(ctx.error)
+              return;
+
+            if(token == ",") {
+              do_get_token(token, ctx, buf);
+              if(token.empty())
+                return do_set_error(ctx, "missing value");
+
+              if(ctx.error)
+                return;
+
+              // next
+              goto do_pack_value_loop_;
+            }
+          }
           break;
 
         case '}':
-          ROCKET_ASSERT(!frm.keyo.empty());
-          insert_result = frm.vso.try_emplace(::std::move(frm.keyo));
-          ROCKET_ASSERT(insert_result.second);
-          insert_result.first->second.m_stor = ::std::move(this->m_stor);
-          this->m_stor = frm.vso;
+          {
+            // Move the last value into this object.
+            auto r = frm.vso.try_emplace(::std::move(frm.keyo));
+            ROCKET_ASSERT(r.second);
+            r.first->second.m_stor.swap(this->m_stor);
+
+            ROCKET_ASSERT(this->m_stor.index() == 0);
+            this->m_stor = frm.vso;
+
+            do_get_token(token, ctx, buf);
+            if(token.empty())
+              return do_set_error(ctx, "unterminated object");
+
+            if(ctx.error)
+              return;
+
+            if(token == ",") {
+              do_get_token(token, ctx, buf);
+              if(token.empty())
+                return do_set_error(ctx, "missing key string");
+
+              if(ctx.error)
+                return;
+
+              if(token[0] != '"')
+                return do_set_error(ctx, "missing key string");
+
+              frm.keyo.assign(token.data() + 1, token.size() - 1);
+              if(frm.vso.count(frm.keyo) != 0)
+                return do_set_error(ctx, "duplicate key string");
+
+              do_get_token(token, ctx, buf);
+              if(token != ":")
+                return do_set_error(ctx, "missing colon");
+
+              do_get_token(token, ctx, buf);
+              if(ctx.error)
+                return do_set_error(ctx, "missing value");
+
+              // next
+              goto do_pack_value_loop_;
+            }
+          }
           break;
 
         default:
           ROCKET_UNREACHABLE();
         }
 
-      do_get_token(token, ctx, buf);
-      if(ctx.error)
-        return;
-
-      if(token == ",")
-        goto do_pack_loop_;
-
-      if((token.size() != 1) || (token[0] != frm.closure))
-        return do_set_error(ctx, "unexpected token");
+      if(token[0] != frm.closure)
+        return do_set_error(ctx, "missing comma");
 
       // close
       stack.pop_back();
@@ -902,6 +974,7 @@ print_to(::rocket::tinybuf& buf, Options opts) const
           pstor = &(frm.ita->m_stor);
           goto do_unpack_loop_;
         }
+
         buf.putn("[]", 2);
         break;
 
@@ -918,6 +991,7 @@ print_to(::rocket::tinybuf& buf, Options opts) const
           pstor = &(frm.ito->second.m_stor);
           goto do_unpack_loop_;
         }
+
         buf.putn("{}", 2);
         break;
 

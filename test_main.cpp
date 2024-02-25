@@ -255,6 +255,20 @@ main(void)
     }
 
     {
+      ::taxon::Value val;
+      assert(val.parse(&"[]"));
+      assert(val.is_array());
+      assert(val.as_array().size() == 0);
+    }
+
+    {
+      ::taxon::Value val;
+      assert(val.parse(&"{}"));
+      assert(val.is_object());
+      assert(val.as_object().size() == 0);
+    }
+
+    {
       static constexpr char source[] = R"({"A":"$b:aWVnaHUzQWhndWVqNGVvSg==","B":"$t:987654321"})";
       ::taxon::Value val;
       assert(val.parse(&source));
@@ -306,49 +320,64 @@ main(void)
       ::taxon::Value val;
       ::taxon::Parser_Context ctx;
 
-      val.parse_with(ctx, &"(");
+      val.parse_with(ctx, &R"(#)");
+      assert(ctx.offset == 0);
       assert(::std::strcmp(ctx.error, "invalid character") == 0);
 
-      val.parse_with(ctx, &"[");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      val.parse_with(ctx, &R"([)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "unterminated array") == 0);
 
-      val.parse_with(ctx, &"[1");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      val.parse_with(ctx, &R"([1)");
+      assert(ctx.offset == 2);
+      assert(::std::strcmp(ctx.error, "unterminated array") == 0);
 
-      val.parse_with(ctx, &"[1,");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      val.parse_with(ctx, &R"([1,)");
+      assert(ctx.offset == 3);
+      assert(::std::strcmp(ctx.error, "missing value") == 0);
 
-      val.parse_with(ctx, &"[1,]");
+      val.parse_with(ctx, &R"([1,])");
+      assert(ctx.offset == 3);
       assert(::std::strcmp(ctx.error, "invalid token") == 0);
 
-      val.parse_with(ctx, &"{");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      val.parse_with(ctx, &R"({)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "unterminated object") == 0);
 
-      val.parse_with(ctx, &"{x");
+      val.parse_with(ctx, &R"({x)");
+      assert(ctx.offset == 1);
       assert(::std::strcmp(ctx.error, "missing key string") == 0);
 
-      val.parse_with(ctx, &"{true");
+      val.parse_with(ctx, &R"({true)");
+      assert(ctx.offset == 1);
       assert(::std::strcmp(ctx.error, "missing key string") == 0);
 
       val.parse_with(ctx, &R"({"x)");
+      assert(ctx.offset == 1);
       assert(::std::strcmp(ctx.error, "unterminated string") == 0);
 
       val.parse_with(ctx, &R"({"x")");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      assert(ctx.offset == 4);
+      assert(::std::strcmp(ctx.error, "missing colon") == 0);
 
       val.parse_with(ctx, &R"({"x"1)");
+      assert(ctx.offset == 4);
       assert(::std::strcmp(ctx.error, "missing colon") == 0);
 
       val.parse_with(ctx, &R"({"x":)");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      assert(ctx.offset == 5);
+      assert(::std::strcmp(ctx.error, "missing value") == 0);
 
       val.parse_with(ctx, &R"({"x":42)");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      assert(ctx.offset == 7);
+      assert(::std::strcmp(ctx.error, "unterminated object") == 0);
 
       val.parse_with(ctx, &R"({"x":42,)");
-      assert(::std::strcmp(ctx.error, "premature end of input") == 0);
+      assert(ctx.offset == 8);
+      assert(::std::strcmp(ctx.error, "missing key string") == 0);
 
       val.parse_with(ctx, &R"({"x":42,})");
+      assert(ctx.offset == 8);
       assert(::std::strcmp(ctx.error, "missing key string") == 0);
     }
 

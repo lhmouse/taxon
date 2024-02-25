@@ -78,6 +78,7 @@ struct Parser_Context
     // !! internal fields !!
     char32_t c;
     ::std::uint32_t reserved;
+    ::std::int64_t last_offset;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is
