@@ -80,7 +80,7 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
 
     // Move the next character from `buf` to `ctx.c`.
     ctx.c = UINT32_MAX;
-    ctx.last_offset = buf.tell();
+    ctx.c_offset = buf.tell();
     ch = buf.getc();
     if(ch == -1)
       return do_set_error(ctx, "no more input data");
@@ -134,7 +134,7 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
       do_mov_char(nullptr, ctx, buf);
 
     token.clear();
-    ctx.offset = ctx.last_offset;
+    ctx.offset = ctx.c_offset;
     ctx.error = nullptr;
 
     switch(ctx.c)
