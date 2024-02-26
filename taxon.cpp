@@ -49,32 +49,46 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
         tok_opt->append(mbs, cr);
     }
 
-    // Move the next character from `buf` to `ctx.c`.
+    // Move the next character from `buf` to `ctx.c`. Source data must be UTF-8.
     ctx.c_offset = buf.tell();
-    int ch = buf.getc();
-    if(ch == -1)
-      return do_set_error(ctx, "no more input data");
-
-    ::std::mbstate_t mbstate = { };
-  do_get_char32_loop_:
-    char e = static_cast<char>(ch);
-    size_t cr = ::std::mbrtoc32(reinterpret_cast<char32_t*>(&(ctx.c)), &e, 1, &mbstate);
-    switch(static_cast<int>(cr))
+    ctx.c = buf.getc();
+    switch(ctx.c)
       {
-      case -3:
-        // UTF-32 is a fixed-length encoding, so this never happens.
-        ROCKET_ASSERT(false);
+      case 0x00 ... 0x7F:
+        // one byte
+        break;
 
-      case -2:
-        // The input byte sequence is incomplete and has been consumed. Nothing
-        // has been written to `ctx.c`. Get another character and try again.
-        ch = buf.getc();
-        if(ch == -1)
-          return do_set_error(ctx, "incomplete multibyte character");
-        goto do_get_char32_loop_;
+      case 0xC2 ... 0xDF:
+      case 0xE0 ... 0xEF:
+      case 0xF0 ... 0xF4:
+        {
+          // 2 bytes: 110? ????
+          // 3 bytes: 1110 ????
+          // 4 bytes: 1111 0???
+          int nbytes = (((ctx.c >> 4) | ~(ctx.c >> 5)) & 3) + 1;
+
+          for(int t = 1;  t != nbytes;  ++t) {
+            int ch = buf.getc();
+            if((ch < 0x80) || (ch > 0xBF))
+              return do_set_error(ctx, "invalid UTF-8 sequence in source string");
+
+            ctx.c <<= 6;
+            ctx.c |= ch - 0x80;
+            ctx.c &= (1 << (nbytes * 5 + 1)) - 1;
+          }
+
+          if((ctx.c < 0x80) || (ctx.c < (1 << (nbytes * 5 - 4)))  // overlong
+                || ((ctx.c >= 0xD800) && (ctx.c <= 0xDFFF))  // surrogates
+                || (ctx.c >= 0x110000))
+            return do_set_error(ctx, "invalid UTF-8 sequence in source string");
+        }
+        break;
 
       case -1:
         return do_set_error(ctx, "no more input data");
+
+      default:
+        return do_set_error(ctx, "invalid UTF-8 sequence in source string");
       }
   }
 
