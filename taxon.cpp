@@ -40,6 +40,7 @@ do_check_global_locale() noexcept
 void
 do_set_error(Parser_Context& ctx, const char* error)
   {
+    ctx.c = -1;
     ctx.error = error;
   }
 
@@ -59,8 +60,7 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
 
     if(tok_opt) {
       // Move the current character from `ctx` to `*tok_opt`.
-      cr = ::std::c32rtomb(mb_seq, ctx.c, &mbstate);
-      ctx.c = UINT32_MAX;
+      cr = ::std::c32rtomb(mb_seq, static_cast<char32_t>(ctx.c), &mbstate);
       if(static_cast<int>(cr) < 0)
         return do_set_error(ctx, "invalid UTF character");
 
@@ -71,7 +71,6 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
     }
 
     // Move the next character from `buf` to `ctx.c`.
-    ctx.c = UINT32_MAX;
     ctx.c_offset = buf.tell();
     ch = buf.getc();
     if(ch == -1)
@@ -79,7 +78,7 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
 
   do_get_char32_loop_:
     mb_seq[0] = static_cast<char>(ch);
-    cr = ::std::mbrtoc32(&(ctx.c), mb_seq, 1, &mbstate);
+    cr = ::std::mbrtoc32(reinterpret_cast<char32_t*>(&(ctx.c)), mb_seq, 1, &mbstate);
     switch(static_cast<int>(cr))
       {
       case -3:
@@ -95,22 +94,20 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
         goto do_get_char32_loop_;
 
       case -1:
-        // An invalid byte has been encountered. Nothing has been written to
-        // `ctx.c`. The input is invalid.
-        return do_set_error(ctx, "invalid multibyte character");
+        return do_set_error(ctx, "no more input data");
       }
   }
 
 struct utf_range
   {
-    char32_t lo, hi;
+    int32_t lo, hi;
 
-    constexpr utf_range(char32_t x) : lo(x), hi(x) { }
-    constexpr utf_range(char32_t x, char32_t y) : lo(x), hi(y) { }
+    constexpr utf_range(int32_t x) : lo(x), hi(x) { }
+    constexpr utf_range(int32_t x, int32_t y) : lo(x), hi(y) { }
   };
 
 bool
-do_char_in(char32_t c, initializer_list<utf_range> range)
+do_char_in(int32_t c, initializer_list<utf_range> range)
   {
     for(const auto& r : range)
       if((c >= r.lo) && (c <= r.hi))
@@ -121,7 +118,7 @@ do_char_in(char32_t c, initializer_list<utf_range> range)
 void
 do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    if(ctx.c == UINT32_MAX)
+    if(ctx.c == -1)
       ctx.c = '\t';
 
     while((ctx.c == '\t') || (ctx.c == '\n') || (ctx.c == '\r') || (ctx.c == ' '))
@@ -189,7 +186,7 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
           do_mov_char(&token, ctx, buf);
 
           while(ctx.c != '"') {
-            if(ctx.c == UINT32_MAX)
+            if(ctx.c == -1)
               return do_set_error(ctx, "unterminated string");
 
             if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
@@ -227,16 +224,16 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
 
                 case 'u':
                   {
-                    char32_t utf_hi = 0;
-                    char32_t utf_lo = 0;
+                    int32_t utf_hi = 0;
+                    int32_t utf_lo = 0;
 
                     // Get a UTF-32 character, which may be either a non-surrogate
                     // UTF-16 code unit, or a surrogate pair. Leading surrogates are
                     // within ['\uD800','\uDBFF'] and trailing surrogates are within
                     // ['\uDC00','\uDFFF'].
                     for(uint32_t t = 0;  t != 4;  ++t) {
-                      utf_hi <<= 4;
                       do_mov_char(nullptr, ctx, buf);
+                      utf_hi <<= 4;
                       switch(ctx.c)
                         {
                         case '0' ... '9':
@@ -253,49 +250,54 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
                         }
                     }
 
-                    if((utf_hi < 0xD800) || (utf_hi > 0xDFFF)) {
-                      ctx.c = utf_hi;
-                      break;
-                    }
+                    switch(utf_hi)
+                      {
+                      case 0x0000 ... 0xD7FF:
+                      case 0xE000 ... 0xFFFF:
+                        // single
+                        ctx.c = utf_hi;
+                        break;
 
-                    if(utf_hi > 0xDBFF)
-                      return do_set_error(ctx, "dangling trailing surrogate");
+                      case 0xD800 ... 0xDBFF:
+                        // surrogates
+                        do_mov_char(nullptr, ctx, buf);
+                        if(ctx.c != '\\')
+                          return do_set_error(ctx, "missing trailing surrogate");
 
-                    // Expect an immediate `\u` sequence for the trailing surrogate.
-                    do_mov_char(nullptr, ctx, buf);
-                    if(ctx.c != '\\')
-                      return do_set_error(ctx, "missing trailing surrogate");
+                        do_mov_char(nullptr, ctx, buf);
+                        if(ctx.c != 'u')
+                          return do_set_error(ctx, "missing trailing surrogate");
 
-                    do_mov_char(nullptr, ctx, buf);
-                    if(ctx.c != 'u')
-                      return do_set_error(ctx, "missing trailing surrogate");
+                        for(uint32_t t = 0;  t != 4;  ++t) {
+                          do_mov_char(nullptr, ctx, buf);
+                          utf_lo <<= 4;
+                          switch(ctx.c)
+                            {
+                            case '0' ... '9':
+                              utf_lo |= ctx.c - '0';
+                              break;
 
-                    // Get the trailing surrogate.
-                    for(uint32_t t = 0;  t != 4;  ++t) {
-                      utf_lo <<= 4;
-                      do_mov_char(nullptr, ctx, buf);
-                      switch(ctx.c)
-                        {
-                        case '0' ... '9':
-                          utf_lo |= ctx.c - '0';
-                          break;
+                            case 'A' ... 'F':
+                            case 'a' ... 'f':
+                              utf_lo |= (ctx.c | 0x20) - 'a' + 10;
+                              break;
 
-                        case 'A' ... 'F':
-                        case 'a' ... 'f':
-                          utf_lo |= (ctx.c | 0x20) - 'a' + 10;
-                          break;
-
-                        default:
-                          return do_set_error(ctx, "invalid hexadecimal digit");
+                            default:
+                              return do_set_error(ctx, "invalid hexadecimal digit");
+                            }
                         }
-                    }
 
-                    if((utf_lo < 0xDC00) || (utf_lo > 0xDFFF))
-                      return do_set_error(ctx, "dangling leading surrogate");
+                        if((utf_lo < 0xDC00) || (utf_lo > 0xDFFF))
+                          return do_set_error(ctx, "dangling leading surrogate");
 
-                    ctx.c = 0x10000 + ((utf_hi - 0xD800) << 10) + (utf_lo - 0xDC00);
-                    break;
+                        ctx.c = 0x10000 + ((utf_hi - 0xD800) << 10) + (utf_lo - 0xDC00);
+                        break;
+
+                      default:
+                        return do_set_error(ctx, "dangling trailing surrogate");
+                      }
                   }
+                  break;
 
                 default:
                   return do_set_error(ctx, "invalid escape sequence");
@@ -311,7 +313,7 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
           // get the next character, as some of these tokens may terminate the input,
           // and the stream may be blocking but we can't really know whether there
           // are more data.
-          ctx.c = UINT32_MAX;
+          ctx.c = -1;
         }
         break;
 
@@ -342,11 +344,11 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
           // and the stream may be blocking but we can't really know whether there
           // are more data.
           token.push_back(static_cast<char>(ctx.c));
-          ctx.c = UINT32_MAX;
+          ctx.c = -1;
         }
         break;
 
-      case UINT32_MAX:
+      case -1:
         return do_set_error(ctx, "premature end of input");
 
       default:
@@ -498,7 +500,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     do_check_global_locale();
 
     // Initialize parser states.
-    ctx.c = UINT32_MAX;
+    ctx.c = -1;
     ctx.offset = -1;
     ctx.error = nullptr;
 

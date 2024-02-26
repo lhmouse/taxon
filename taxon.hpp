@@ -92,7 +92,7 @@ struct Parser_Context
     const char* error;
 
     // !! internal fields !!
-    char32_t c;
+    int32_t c;
     uint32_t reserved;
     int64_t c_offset;
   };
