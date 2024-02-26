@@ -343,7 +343,7 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
         break;
 
       case -1:
-        return do_set_error(ctx, "premature end of input");
+        return do_set_error(ctx, "end of input");
 
       default:
         return do_set_error(ctx, "invalid character");
