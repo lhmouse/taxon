@@ -244,52 +244,47 @@ do_get_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf
                         }
                     }
 
-                    switch(utf_hi)
-                      {
-                      case 0x0000 ... 0xD7FF:
-                      case 0xE000 ... 0xFFFF:
-                        // single
-                        ctx.c = utf_hi;
-                        break;
+                    if((utf_hi >= 0xDC00) && (utf_hi <= 0xDFFF))
+                      return do_set_error(ctx, "dangling trailing surrogate");
 
-                      case 0xD800 ... 0xDBFF:
-                        // surrogates
+                    if((utf_hi <= 0xD7FF) || (utf_hi >= 0xE000)) {
+                      // single
+                      ctx.c = utf_hi;
+                    }
+                    else {
+                      // surrogates
+                      do_mov_char(nullptr, ctx, buf);
+                      if(ctx.c != '\\')
+                        return do_set_error(ctx, "missing trailing surrogate");
+
+                      do_mov_char(nullptr, ctx, buf);
+                      if(ctx.c != 'u')
+                        return do_set_error(ctx, "missing trailing surrogate");
+
+                      for(uint32_t t = 0;  t != 4;  ++t) {
                         do_mov_char(nullptr, ctx, buf);
-                        if(ctx.c != '\\')
-                          return do_set_error(ctx, "missing trailing surrogate");
+                        utf_lo <<= 4;
+                        switch(ctx.c)
+                          {
+                          case '0' ... '9':
+                            utf_lo |= ctx.c - '0';
+                            break;
 
-                        do_mov_char(nullptr, ctx, buf);
-                        if(ctx.c != 'u')
-                          return do_set_error(ctx, "missing trailing surrogate");
+                          case 'A' ... 'F':
+                          case 'a' ... 'f':
+                            utf_lo |= (ctx.c | 0x20) - 'a' + 10;
+                            break;
 
-                        for(uint32_t t = 0;  t != 4;  ++t) {
-                          do_mov_char(nullptr, ctx, buf);
-                          utf_lo <<= 4;
-                          switch(ctx.c)
-                            {
-                            case '0' ... '9':
-                              utf_lo |= ctx.c - '0';
-                              break;
-
-                            case 'A' ... 'F':
-                            case 'a' ... 'f':
-                              utf_lo |= (ctx.c | 0x20) - 'a' + 10;
-                              break;
-
-                            default:
-                              return do_set_error(ctx, "invalid hexadecimal digit");
-                            }
-                        }
-
-                        if((utf_lo < 0xDC00) || (utf_lo > 0xDFFF))
-                          return do_set_error(ctx, "dangling leading surrogate");
-
-                        ctx.c = 0x10000 + ((utf_hi - 0xD800) << 10) + (utf_lo - 0xDC00);
-                        break;
-
-                      default:
-                        return do_set_error(ctx, "dangling trailing surrogate");
+                          default:
+                            return do_set_error(ctx, "invalid hexadecimal digit");
+                          }
                       }
+
+                      if((utf_lo < 0xDC00) || (utf_lo > 0xDFFF))
+                        return do_set_error(ctx, "dangling leading surrogate");
+
+                      ctx.c = 0x10000 + ((utf_hi - 0xD800) << 10) + (utf_lo - 0xDC00);
+                    }
                   }
                   break;
 
