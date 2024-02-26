@@ -419,17 +419,23 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
           buf.putn("\\t", 2);
           break;
 
-        case 0x20 ... 0x7E:
+        case '"':   // 0x22
+        case '/':   // 0x2F
+        case '\\':  // 0x5C
           {
-            // ASCII printable
-            if((c16 == '"') || (c16 == '\\') || (c16 == '/')) {
-              char esc_seq[4] = "\\";
-              esc_seq[1] = static_cast<char>(c16);
-              buf.putn(esc_seq, 2);
-            }
-            else
-              buf.putc(static_cast<char>(c16));
+            // plain escaped
+            char esc_seq[4] = "\\";
+            esc_seq[1] = static_cast<char>(c16);
+            buf.putn(esc_seq, 2);
           }
+          break;
+
+        case 0x20 ... 0x21:
+        case 0x23 ... 0x2E:
+        case 0x30 ... 0x5B:
+        case 0x5D ... 0x7E:
+          // ASCII printable
+          buf.putc(static_cast<char>(c16));
           break;
 
         default:
