@@ -1,4 +1,4 @@
-// This file is part of Poseidon.
+// This file is part of TAXON.
 // Copyleft 2024, LH_Mouse. All wrongs reserved.
 
 #include "taxon.hpp"
