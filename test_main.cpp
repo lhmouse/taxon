@@ -235,7 +235,7 @@ main(void)
     }
 
     {
-      // `["$s:meow",{"x":true},12.5,[37,null]]`
+      // `["$s:$meow",{"x":true},12.5,[37,null]]`
       ::taxon::Value val;
       val.mut_array().resize(4);
       val.mut_array().mut(0) = &"$meow";
