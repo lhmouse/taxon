@@ -603,10 +603,12 @@ class Value
         return *this;
       }
 
-    // Parse a buffer for a value, and store it into the current object. Errors are
-    // stored into the `Parser_Context`. The context object does not have to be
-    // initialized. If this function stores an error into `ctx` or throws an
-    // exception, the current value is indeterminate.
+    // Parse a buffer for a value, and store it into the current object. The buffer
+    // shall contain a valid UTF-8 string. This function converts non-ASCII source
+    // characters in accordance with the current global locale, which should be
+    // configured with `setlocale()`. Errors are stored into `ctx`. The context
+    // object does not have to be initialized. If this function stores an error or
+    // or throws an exception, the current value is indeterminate.
     void
     parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts = options_default);
 
@@ -628,9 +630,11 @@ class Value
     // Print this value. Invalid values are sanitized so they may become garbage or
     // null, but the entire output will always be valid TAXON. This function should
     // not throw exceptions on invalid inputs; only in case of an I/O error or
-    // failure to allocate memory. A byte string of length 1, 2, 3, 4, 8, 12, 16,
-    // 20, 24, 28 or 32 is encoded in hex and a byte string of any other length is
-    // encoded in base64.
+    // failure to allocate memory. By default, binary data that look like common hash
+    // values or UUIDs are encoded in hex, and the others are encoded in base64.
+    // Non-ASCII characters are encoded in accordance with the current global locale,
+    // which should be configured with `setlocale()`. This function produces an ASCII
+    // string.
     void
     print_to(::rocket::tinybuf& buf, Options opts = options_default) const;
 
