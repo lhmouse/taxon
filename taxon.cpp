@@ -668,9 +668,9 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                   uint32_t word = 0;
 
                   for(uint32_t t = 0;  t != 2;  ++t) {
-                    word <<= 4;
                     uint32_t ch = static_cast<uint8_t>(*bptr);
                     bptr ++;
+                    word <<= 4;
 
                     switch(ch)
                       {
