@@ -8,7 +8,6 @@
 #include <rocket/ascii_numget.hpp>
 #include <cmath>
 #include <cstdio>
-#include <clocale>
 #include <climits>
 #include <cfloat>
 #include <cuchar>
@@ -18,24 +17,6 @@ template class ::rocket::cow_hashmap<::rocket::prehashed_string,
   ::taxon::Value, ::rocket::prehashed_string::hash>;
 namespace taxon {
 namespace {
-
-void
-do_check_global_locale() noexcept
-  {
-    static constexpr char keywords[][8] = { ".utf8", ".utf-8", ".UTF-8" };
-    const char* locale = ::std::setlocale(LC_ALL, nullptr);
-    const char* found = nullptr;
-
-    if(locale)
-      for(const char* kw : keywords)
-        if((found = ::std::strstr(locale, kw)) != nullptr)
-          break;
-
-    if(!found)
-      ::std::fprintf(stderr,
-          "WARNING: Please set a UTF-8 locale instead of `%s`.\n",
-          locale ? locale : "(no locale)");
-  }
 
 void
 do_set_error(Parser_Context& ctx, const char* error)
@@ -53,32 +34,31 @@ do_is_digit(char c)
 void
 do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    ::std::mbstate_t mbstate = { };
-    size_t cr;
-    char mb_seq[MB_LEN_MAX];
-    int ch;
-
     if(tok_opt) {
       // Move the current character from `ctx` to `*tok_opt`.
-      cr = ::std::c32rtomb(mb_seq, static_cast<char32_t>(ctx.c), &mbstate);
+      ::std::mbstate_t mbstate = { };
+      char mbs[MB_LEN_MAX];
+      size_t cr = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbstate);
       if(static_cast<int>(cr) < 0)
-        return do_set_error(ctx, "invalid UTF character");
+        return do_set_error(ctx, "character not representable in current locale");
 
+      // If `c32rtomb()` has returned zero, then it is a null character.
       if(cr <= 1)
-        tok_opt->push_back(mb_seq[0]);
+        tok_opt->push_back(mbs[0]);
       else
-        tok_opt->append(mb_seq, cr);
+        tok_opt->append(mbs, cr);
     }
 
     // Move the next character from `buf` to `ctx.c`.
     ctx.c_offset = buf.tell();
-    ch = buf.getc();
+    int ch = buf.getc();
     if(ch == -1)
       return do_set_error(ctx, "no more input data");
 
+    ::std::mbstate_t mbstate = { };
   do_get_char32_loop_:
-    mb_seq[0] = static_cast<char>(ch);
-    cr = ::std::mbrtoc32(reinterpret_cast<char32_t*>(&(ctx.c)), mb_seq, 1, &mbstate);
+    char e = static_cast<char>(ch);
+    size_t cr = ::std::mbrtoc32(reinterpret_cast<char32_t*>(&(ctx.c)), &e, 1, &mbstate);
     switch(static_cast<int>(cr))
       {
       case -3:
@@ -497,8 +477,6 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
-    do_check_global_locale();
-
     // Initialize parser states.
     ctx.c = -1;
     ctx.offset = -1;
@@ -936,8 +914,6 @@ void
 Value::
 print_to(::rocket::tinybuf& buf, Options opts) const
   {
-    do_check_global_locale();
-
     // Break deep recursion with a handwritten stack.
     struct xFrame
       {
