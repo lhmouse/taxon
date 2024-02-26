@@ -549,8 +549,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         do_get_token(token, ctx, buf);
         if(token.empty())
           return do_set_error(ctx, "unterminated array");
-
-        if(ctx.error)
+        else if(ctx.error)
           return;
 
         if(token != "]") {
@@ -568,8 +567,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         do_get_token(token, ctx, buf);
         if(token.empty())
           return do_set_error(ctx, "unterminated object");
-
-        if(ctx.error)
+        else if(ctx.error)
           return;
 
         if(token != "}") {
@@ -588,8 +586,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           do_get_token(token, ctx, buf);
           if(token.empty())
             return do_set_error(ctx, "missing value");
-
-          if(ctx.error)
+          else if(ctx.error)
             return;
 
           // open
@@ -806,16 +803,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             do_get_token(token, ctx, buf);
             if(token.empty())
               return do_set_error(ctx, "unterminated array");
-
-            if(ctx.error)
+            else if(ctx.error)
               return;
 
             if(token == ",") {
               do_get_token(token, ctx, buf);
               if(token.empty())
                 return do_set_error(ctx, "missing value");
-
-              if(ctx.error)
+              else if(ctx.error)
                 return;
 
               // next
@@ -837,16 +832,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             do_get_token(token, ctx, buf);
             if(token.empty())
               return do_set_error(ctx, "unterminated object");
-
-            if(ctx.error)
+            else if(ctx.error)
               return;
 
             if(token == ",") {
               do_get_token(token, ctx, buf);
               if(token.empty())
                 return do_set_error(ctx, "missing key string");
-
-              if(ctx.error)
+              else if(ctx.error)
                 return;
 
               if(token[0] != '"')
