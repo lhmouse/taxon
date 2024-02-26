@@ -1100,7 +1100,8 @@ print_to(::rocket::tinybuf& buf, Options opts) const
               uint64_t word = 0;
 
               for(uint32_t t = 0;  t != nrem;  ++t) {
-                word = word << 8 | static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
+                word <<= 8;
+                word |= static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
                 bptr ++;
               }
 
