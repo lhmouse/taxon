@@ -13,22 +13,38 @@
 #include <chrono>
 namespace taxon {
 
+using ::std::int8_t;
+using ::std::uint8_t;
+using ::std::int16_t;
+using ::std::uint16_t;
+using ::std::int32_t;
+using ::std::uint32_t;
+using ::std::int64_t;
+using ::std::uint64_t;
+using ::std::intptr_t;
+using ::std::uintptr_t;
+using ::std::ptrdiff_t;
+using ::std::size_t;
+using ::std::nullptr_t;
+using ::std::initializer_list;
+
 enum Options : uint32_t;
 struct Parser_Context;
 class Value;
 
 // Define aliases and enumerators for data types.
-using V_null    = ::std::nullptr_t;
-using V_array   = ::rocket::cow_vector<Value>;
-using V_object  = ::rocket::cow_hashmap<::rocket::prehashed_string,
-                       Value, ::rocket::prehashed_string::hash>;
-
+// - scalar
+using V_null    = nullptr_t;
 using V_boolean = bool;
-using V_integer = ::std::int64_t;
+using V_integer = int64_t;
 using V_number  = double;
 using V_string  = ::rocket::cow_string;
 using V_binary  = ::rocket::cow_bstring;
 using V_time    = ::std::chrono::system_clock::time_point;
+// - aggregate
+using V_array   = ::rocket::cow_vector<Value>;
+using V_object  = ::rocket::cow_hashmap<::rocket::prehashed_string,
+                       Value, ::rocket::prehashed_string::hash>;
 
 // Expand a sequence of alternatives without a trailing comma. This macro is part
 // of the ABI.
@@ -44,7 +60,7 @@ using V_time    = ::std::chrono::system_clock::time_point;
   /*  8 */ U##_time
 
 // Define type enumerators such as `t_null`, `t_array`, `t_number`, and so on.
-enum Type : ::std::uint8_t {TAXON_TYPES_IEZUVAH3_(t)};
+enum Type : uint8_t { TAXON_TYPES_IEZUVAH3_(t) };
 using Variant = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
 
 // This value controls the behavior of both the parser and the formatter. Multiple
@@ -70,15 +86,15 @@ ROCKET_DEFINE_ENUM_OPERATORS(Options)
 struct Parser_Context
   {
     // stream offset of the last token
-    ::std::int64_t offset;
+    int64_t offset;
 
     // if no error, a null pointer; otherwise, a static string about the error
     const char* error;
 
     // !! internal fields !!
     char32_t c;
-    ::std::uint32_t reserved;
-    ::std::int64_t c_offset;
+    uint32_t reserved;
+    int64_t c_offset;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is

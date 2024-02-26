@@ -19,14 +19,6 @@ template class ::rocket::cow_hashmap<::rocket::prehashed_string,
 namespace taxon {
 namespace {
 
-using ::std::uint8_t;
-using ::std::uint16_t;
-using ::std::uint32_t;
-using ::std::uint64_t;
-using ::std::ptrdiff_t;
-using ::std::size_t;
-using ::std::mbstate_t;
-
 void
 do_check_global_locale() noexcept
   {
@@ -60,7 +52,7 @@ do_is_digit(char c)
 void
 do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    mbstate_t mbstate = { };
+    ::std::mbstate_t mbstate = { };
     size_t cr;
     char mb_seq[MB_LEN_MAX];
     int ch;
@@ -113,15 +105,17 @@ struct utf_range
   {
     char32_t lo, hi;
 
-    constexpr utf_range(char32_t x) noexcept : lo(x), hi(x) { }
-    constexpr utf_range(char32_t x, char32_t y) noexcept : lo(x), hi(y) { }
+    constexpr utf_range(char32_t x) : lo(x), hi(x) { }
+    constexpr utf_range(char32_t x, char32_t y) : lo(x), hi(y) { }
   };
 
 bool
-do_char_in(char32_t c, ::std::initializer_list<utf_range> range) noexcept
+do_char_in(char32_t c, initializer_list<utf_range> range)
   {
-    return ::rocket::any_of(range,
-        [=](utf_range r) { return (c >= r.lo) && (c <= r.hi);  });
+    for(const auto& r : range)
+      if((c >= r.lo) && (c <= r.hi))
+        return true;
+    return false;
   }
 
 void
@@ -366,7 +360,7 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
     const char* bptr = str.c_str();
     const char* const eptr = bptr + str.length();
 
-    mbstate_t mbstate = { };
+    ::std::mbstate_t mbstate = { };
     char16_t c16;
     size_t cr;
 
@@ -784,7 +778,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
 
                 // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
                 // '9999-12-31T23:59:59.000Z'.
-                ::std::int64_t count;
+                int64_t count;
                 numg.cast_I(count, -2208988800000, 253402300799999);
                 this->m_stor.emplace<V_time>(::std::chrono::milliseconds(count));
                 if(numg.overflowed())
