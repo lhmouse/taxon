@@ -815,7 +815,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             }
 
             ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = frm.vsa;
+            this->m_stor = ::std::move(frm.vsa);
           }
           break;
 
@@ -859,7 +859,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             }
 
             ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = frm.vso;
+            this->m_stor = ::std::move(frm.vso);
           }
           break;
 
