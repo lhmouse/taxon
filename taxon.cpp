@@ -797,9 +797,6 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             // Move the last value into this array.
             frm.vsa.emplace_back().m_stor.swap(this->m_stor);
 
-            ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = frm.vsa;
-
             do_get_token(token, ctx, buf);
             if(token.empty())
               return do_set_error(ctx, "unterminated array");
@@ -816,6 +813,9 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
               // next
               goto do_pack_value_loop_;
             }
+
+            ROCKET_ASSERT(this->m_stor.index() == 0);
+            this->m_stor = frm.vsa;
           }
           break;
 
@@ -825,9 +825,6 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             auto r = frm.vso.try_emplace(::std::move(frm.keyo));
             ROCKET_ASSERT(r.second);
             r.first->second.m_stor.swap(this->m_stor);
-
-            ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = frm.vso;
 
             do_get_token(token, ctx, buf);
             if(token.empty())
@@ -860,6 +857,9 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
               // next
               goto do_pack_value_loop_;
             }
+
+            ROCKET_ASSERT(this->m_stor.index() == 0);
+            this->m_stor = frm.vso;
           }
           break;
 
