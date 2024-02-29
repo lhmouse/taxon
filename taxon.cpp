@@ -501,14 +501,15 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     struct xFrame
       {
         char closure;
+        Variant* target;
         V_array vsa;
         V_object vso;
-        ::rocket::prehashed_string keyo;
       };
 
     ::rocket::cow_vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
+    Variant* pstor = &(this->m_stor);
 
     do_get_token(token, ctx, buf);
     if(ctx.error)
@@ -520,7 +521,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       case 'n':
         {
           if(token == "null")
-            this->m_stor.emplace<V_null>();
+            pstor->emplace<V_null>();
           else
             return do_set_error(ctx, "invalid token");
         }
@@ -529,7 +530,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       case 't':
         {
           if(token == "true")
-            this->m_stor.emplace<V_boolean>(true);
+            pstor->emplace<V_boolean>(true);
           else
             return do_set_error(ctx, "invalid token");
         }
@@ -538,7 +539,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       case 'f':
         {
           if(token == "false")
-            this->m_stor.emplace<V_boolean>(false);
+            pstor->emplace<V_boolean>(false);
           else
             return do_set_error(ctx, "invalid token");
         }
@@ -556,10 +557,12 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           // open
           auto& frm = stack.emplace_back();
           frm.closure = ']';
+          frm.target = pstor;
+          pstor = &(frm.vsa.emplace_back().m_stor);
           goto do_pack_value_loop_;
         }
 
-        this->m_stor.emplace<V_array>();
+        pstor->emplace<V_array>();
         break;
 
       case '{':
@@ -576,8 +579,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           if(token[0] != '"')
             return do_set_error(ctx, "missing key string");
 
-          ::rocket::prehashed_string keyo;
-          keyo.assign(token.data() + 1, token.size() - 1);
+          ::rocket::prehashed_string key;
+          key.assign(token.data() + 1, token.size() - 1);
 
           do_get_token(token, ctx, buf);
           if(token != ":")
@@ -592,11 +595,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           // open
           auto& frm = stack.emplace_back();
           frm.closure = '}';
-          frm.keyo = ::std::move(keyo);
+          frm.target = pstor;
+          auto emplace_r = frm.vso.try_emplace(::std::move(key), nullptr);
+          ROCKET_ASSERT(emplace_r.second);
+          pstor = &(emplace_r.first->second.m_stor);
           goto do_pack_value_loop_;
         }
 
-        this->m_stor.emplace<V_object>();
+        pstor->emplace<V_object>();
         break;
 
       case '+':
@@ -605,7 +611,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         {
           // number
           numg.parse_DD(token.data(), token.size());
-          numg.cast_D(this->m_stor.emplace<V_number>(), -DBL_MAX, DBL_MAX);
+          numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
           if(numg.overflowed())
             return do_set_error(ctx, "number out of range");
         }
@@ -614,7 +620,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       case '"':
         if((opts & option_json_mode) || (token[1] != '$')) {
           // plain string
-          this->m_stor.emplace<V_string>(token.data() + 1, token.size() - 1);
+          pstor->emplace<V_string>(token.data() + 1, token.size() - 1);
         }
         else {
           // annotated string
@@ -633,7 +639,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 if(numg.parse_I(bptr, tlen) != tlen)
                   return do_set_error(ctx, "invalid 64-bit integer");
 
-                numg.cast_I(this->m_stor.emplace<V_integer>(), INT64_MIN, INT64_MAX);
+                numg.cast_I(pstor->emplace<V_integer>(), INT64_MIN, INT64_MAX);
                 if(numg.overflowed())
                   return do_set_error(ctx, "64-bit integer out of range");
               }
@@ -647,14 +653,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
 
                 // Values that are out of range are converted to infinities and
                 // are always accepted.
-                numg.cast_D(this->m_stor.emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
+                numg.cast_D(pstor->emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
               }
               break;
 
             case 's':
               {
                 // string
-                this->m_stor.emplace<V_string>(bptr, tlen);
+                pstor->emplace<V_string>(bptr, tlen);
               }
               break;
 
@@ -664,7 +670,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 if(tlen / 2 * 2 != tlen)
                   return do_set_error(ctx, "invalid hexadecimal string");
 
-                auto& bin = this->m_stor.emplace<V_binary>();
+                auto& bin = pstor->emplace<V_binary>();
                 bin.reserve(tlen / 2);
 
                 while(bptr != eptr) {
@@ -702,7 +708,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 if(tlen / 4 * 4 != tlen)
                   return do_set_error(ctx, "invalid base64 string");
 
-                auto& bin = this->m_stor.emplace<V_binary>();
+                auto& bin = pstor->emplace<V_binary>();
                 bin.reserve(tlen / 4 * 3);
 
                 while(bptr != eptr) {
@@ -772,7 +778,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 // '9999-12-31T23:59:59.999Z'.
                 int64_t count;
                 numg.cast_I(count, -2208988800000, 253402300799999);
-                this->m_stor.emplace<V_time>(::std::chrono::milliseconds(count));
+                pstor->emplace<V_time>(::std::chrono::milliseconds(count));
                 if(numg.overflowed())
                   return do_set_error(ctx, "timestamp out of range");
               }
@@ -794,9 +800,6 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         {
         case ']':
           {
-            // Move the last value into this array.
-            frm.vsa.emplace_back().m_stor.swap(this->m_stor);
-
             do_get_token(token, ctx, buf);
             if(token.empty())
               return do_set_error(ctx, "unterminated array");
@@ -811,21 +814,20 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 return;
 
               // next
+              pstor = &(frm.vsa.emplace_back().m_stor);
               goto do_pack_value_loop_;
             }
 
-            ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = ::std::move(frm.vsa);
+            if(token != "]")
+              return do_set_error(ctx, "missing comma");
+
+            ROCKET_ASSERT(frm.target->index() == 0);
+            frm.target->emplace<V_array>(::std::move(frm.vsa));
           }
           break;
 
         case '}':
           {
-            // Move the last value into this object.
-            auto r = frm.vso.try_emplace(::std::move(frm.keyo));
-            ROCKET_ASSERT(r.second);
-            r.first->second.m_stor.swap(this->m_stor);
-
             do_get_token(token, ctx, buf);
             if(token.empty())
               return do_set_error(ctx, "unterminated object");
@@ -842,8 +844,10 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
               if(token[0] != '"')
                 return do_set_error(ctx, "missing key string");
 
-              frm.keyo.assign(token.data() + 1, token.size() - 1);
-              if(frm.vso.count(frm.keyo) != 0)
+              ::rocket::prehashed_string key;
+              key.assign(token.data() + 1, token.size() - 1);
+              auto emplace_r = frm.vso.try_emplace(::std::move(key), nullptr);
+              if(!emplace_r.second)
                 return do_set_error(ctx, "duplicate key string");
 
               do_get_token(token, ctx, buf);
@@ -855,11 +859,15 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 return do_set_error(ctx, "missing value");
 
               // next
+              pstor = &(emplace_r.first->second.m_stor);
               goto do_pack_value_loop_;
             }
 
-            ROCKET_ASSERT(this->m_stor.index() == 0);
-            this->m_stor = ::std::move(frm.vso);
+            if(token != "}")
+              return do_set_error(ctx, "missing comma");
+
+            ROCKET_ASSERT(frm.target->index() == 0);
+            frm.target->emplace<V_object>(::std::move(frm.vso));
           }
           break;
 
@@ -867,10 +875,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           ROCKET_UNREACHABLE();
         }
 
-      if(token[0] != frm.closure)
-        return do_set_error(ctx, "missing comma");
-
       // close
+      pstor = frm.target;
       stack.pop_back();
     }
   }
