@@ -502,8 +502,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       {
         char closure;
         Variant* target;
-        V_array vsa;
-        V_object vso;
+        V_array* psa;
+        V_object* pso;
       };
 
     ::rocket::cow_vector<xFrame> stack;
@@ -558,10 +558,12 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           auto& frm = stack.emplace_back();
           frm.closure = ']';
           frm.target = pstor;
-          pstor = &(frm.vsa.emplace_back().m_stor);
+          frm.psa = &(pstor->emplace<V_array>());
+          pstor = &(frm.psa->emplace_back().m_stor);
           goto do_pack_value_loop_;
         }
 
+        // empty
         pstor->emplace<V_array>();
         break;
 
@@ -596,12 +598,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           auto& frm = stack.emplace_back();
           frm.closure = '}';
           frm.target = pstor;
-          auto emplace_r = frm.vso.try_emplace(::std::move(key), nullptr);
-          ROCKET_ASSERT(emplace_r.second);
-          pstor = &(emplace_r.first->second.m_stor);
+          frm.pso = &(pstor->emplace<V_object>());
+          auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
+          ROCKET_ASSERT(emplace_result.second);
+          pstor = &(emplace_result.first->second.m_stor);
           goto do_pack_value_loop_;
         }
 
+        // empty
         pstor->emplace<V_object>();
         break;
 
@@ -814,15 +818,9 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 return;
 
               // next
-              pstor = &(frm.vsa.emplace_back().m_stor);
+              pstor = &(frm.psa->emplace_back().m_stor);
               goto do_pack_value_loop_;
             }
-
-            if(token != "]")
-              return do_set_error(ctx, "missing comma");
-
-            ROCKET_ASSERT(frm.target->index() == 0);
-            frm.target->emplace<V_array>(::std::move(frm.vsa));
           }
           break;
 
@@ -846,8 +844,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
 
               ::rocket::prehashed_string key;
               key.assign(token.data() + 1, token.size() - 1);
-              auto emplace_r = frm.vso.try_emplace(::std::move(key), nullptr);
-              if(!emplace_r.second)
+              auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
+              if(!emplace_result.second)
                 return do_set_error(ctx, "duplicate key string");
 
               do_get_token(token, ctx, buf);
@@ -859,21 +857,18 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 return do_set_error(ctx, "missing value");
 
               // next
-              pstor = &(emplace_r.first->second.m_stor);
+              pstor = &(emplace_result.first->second.m_stor);
               goto do_pack_value_loop_;
             }
-
-            if(token != "}")
-              return do_set_error(ctx, "missing comma");
-
-            ROCKET_ASSERT(frm.target->index() == 0);
-            frm.target->emplace<V_object>(::std::move(frm.vso));
           }
           break;
 
         default:
           ROCKET_UNREACHABLE();
         }
+
+      if(token[0] != frm.closure)
+        return do_set_error(ctx, "missing comma");
 
       // close
       pstor = frm.target;
