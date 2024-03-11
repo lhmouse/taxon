@@ -778,8 +778,8 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
                 if(numg.parse_I(bptr, tlen) != tlen)
                   return do_set_error(ctx, "invalid timestamp");
 
-                // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
-                // '9999-12-31T23:59:59.999Z'.
+                // The allowed timestamp values are from '1900-01-01T00:00:00.000Z'
+                // to '9999-12-31T23:59:59.999Z'.
                 int64_t count;
                 numg.cast_I(count, -2208988800000, 253402300799999);
                 pstor->emplace<V_time>(::std::chrono::milliseconds(count));
