@@ -454,6 +454,10 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
 
 }  // namespace
 
+// We assume that a all-bit-zero struct represents the `null` value.
+// This is effectively undefined behavior. Don't play with this at home!
+alignas(Value) const char null_storage[sizeof(Value)] = { };
+
 Value::
 ~Value()
   {

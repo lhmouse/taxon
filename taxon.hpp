@@ -666,6 +666,10 @@ operator<<(::rocket::tinyfmt& fmt, const Value& value)
     return fmt;
   }
 
+// This is a static object that need not be destroyed.
+extern const char null_storage[];
+static const Value& null = reinterpret_cast<const Value&>(null_storage);
+
 // Values are reference-counting so all these will not throw exceptions. It is
 // recommended that they be passed by value or by const reference.
 static_assert(::std::is_nothrow_copy_constructible<Value>::value, "");
