@@ -12,7 +12,7 @@
 ## NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 ## CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-project('taxon', 'cpp', version: '1.0.alpha')
+project('taxon', 'cpp', version: '1.0.beta')
 
 #===========================================================
 # Global configuration
