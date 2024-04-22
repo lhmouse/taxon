@@ -441,10 +441,11 @@ class Value
         this->m_stor.emplace<V_string>(val);
       }
 
-    template<size_t N>
-    Value(const char (*val)[N]) noexcept
+    template<typename ycharT, size_t N,
+    ROCKET_ENABLE_IF(::std::is_same<ycharT, char>::value)>
+    Value(const ycharT (*ps)[N]) noexcept
       {
-        this->m_stor.emplace<V_string>(val);
+        this->m_stor.emplace<V_string>(ps);
       }
 
     // Checks whether the stored value is a character string.
@@ -503,11 +504,12 @@ class Value
         return *this;
       }
 
-    template<size_t N>
+    template<typename ycharT, size_t N,
+    ROCKET_ENABLE_IF(::std::is_same<ycharT, char>::value)>
     Value&
-    operator=(const char (*val)[N]) & noexcept
+    operator=(const ycharT (*ps)[N]) & noexcept
       {
-        this->mut_string() = val;
+        this->mut_string() = ps;
         return *this;
       }
 
