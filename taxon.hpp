@@ -418,7 +418,7 @@ class Value
     Value&
     operator=(float val) & noexcept
       {
-        this->mut_number() = val;
+        this->mut_number() = static_cast<double>(val);
         return *this;
       }
 
