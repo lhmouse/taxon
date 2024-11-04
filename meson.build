@@ -12,7 +12,11 @@
 ## NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 ## CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-project('taxon', 'cpp', version: '1.1.alpha')
+project('taxon',
+        'cpp',
+        version: '1.1.alpha',
+        license: 'BSD-3-Clause',
+        meson_version: '>= 1.3.0')
 
 #===========================================================
 # Global configuration
