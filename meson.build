@@ -91,6 +91,7 @@ import('pkgconfig').generate(lib_taxon,
 test_exe = executable('test_main', 'test_main.cpp',
       dependencies: [ dep_asteria ],
       link_with: lib_taxon,
+      build_by_default: false,
       install: false)
 
 test('../test_main.cpp', test_exe)
