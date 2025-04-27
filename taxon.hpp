@@ -1,5 +1,5 @@
 // This file is part of TAXON.
-// Copyleft 2024, LH_Mouse. All wrongs reserved.
+// Copyleft 2024-2025, LH_Mouse. All wrongs reserved.
 
 #ifndef TAXON_TAXON_HPP_
 #define TAXON_TAXON_HPP_
