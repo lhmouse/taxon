@@ -13,8 +13,8 @@
 #include <cuchar>
 template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 template class ::rocket::cow_vector<::taxon::Value>;
-template class ::rocket::cow_hashmap<::rocket::prehashed_string,
-  ::taxon::Value, ::rocket::prehashed_string::hash>;
+template class ::rocket::cow_hashmap<rocket::phcow_string,
+  ::taxon::Value, rocket::phcow_string::hash>;
 namespace taxon {
 namespace {
 
@@ -585,7 +585,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
           if(token[0] != '"')
             return do_set_error(ctx, "missing key string");
 
-          ::rocket::prehashed_string key;
+          rocket::phcow_string key;
           key.assign(token.data() + 1, token.size() - 1);
 
           do_get_token(token, ctx, buf);
@@ -846,7 +846,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
               if(token[0] != '"')
                 return do_set_error(ctx, "missing key string");
 
-              ::rocket::prehashed_string key;
+              rocket::phcow_string key;
               key.assign(token.data() + 1, token.size() - 1);
               auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
               if(!emplace_result.second)
