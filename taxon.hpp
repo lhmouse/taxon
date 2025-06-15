@@ -77,6 +77,12 @@ enum Options : uint32_t
     // Encodes binary data always in base64 and never in hex. This option has no
     // effect on the parser which always accepts either.
     option_bin_as_base64 = 0b00000010,
+
+    // Bypasses checks about levels of nesting arrays or objects. By default, the
+    // parser fails if a value is deeper than 32 levels. This option ignores the
+    // limit, but the caller must ensure the source string comes from a trusted
+    // source. This option has no effect on the formatter.
+    option_bypass_nesting_limit = 0b00000100,
   };
 
 ROCKET_DEFINE_ENUM_OPERATORS(Options)

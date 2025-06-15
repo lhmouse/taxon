@@ -520,7 +520,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       return;
 
   do_pack_value_loop_:
-    if(stack.size() > 32)
+    if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
       return do_set_error(ctx, "nesting limit exceeded");
 
     switch(token[0])
