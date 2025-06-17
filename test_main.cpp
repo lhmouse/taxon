@@ -113,7 +113,7 @@ main(void)
       assert(val.as_boolean() == true);
       assert(val.print_to_string() == "true");
 
-      val.mut_integer() = 42;
+      val.open_integer() = 42;
       assert(val.type() == ::taxon::t_integer);
       assert(val.is_integer());
       assert(val.as_integer() == 42);
@@ -126,7 +126,7 @@ main(void)
       assert(val.as_integer() == 0);
       assert(val.print_to_string() == R"("$l:0")");
 
-      val.mut_number() = -5;
+      val.open_number() = -5;
       assert(val.is_number());
       assert(val.as_number() == -5);
     }
@@ -237,13 +237,13 @@ main(void)
     {
       // `["$s:$meow",{"x":true},12.5,[37,null]]`
       ::taxon::Value val;
-      val.mut_array().resize(4);
-      val.mut_array().mut(0) = &"$meow";
-      val.mut_array().mut(1).mut_object().try_emplace(&"x", true);
-      val.mut_array().mut(2) = 12.5;
-      val.mut_array().mut(3).mut_array().resize(2);
-      val.mut_array().mut(3).mut_array().mut(0) = 37;
-      val.mut_array().mut(3).mut_array().mut(1) = nullptr;
+      val.open_array().resize(4);
+      val.open_array().mut(0) = &"$meow";
+      val.open_array().mut(1).open_object().try_emplace(&"x", true);
+      val.open_array().mut(2) = 12.5;
+      val.open_array().mut(3).open_array().resize(2);
+      val.open_array().mut(3).open_array().mut(0) = 37;
+      val.open_array().mut(3).open_array().mut(1) = nullptr;
       assert(val.print_to_string() == R"(["$s:$meow",{"x":true},12.5,["$l:37",null]])");
     }
 

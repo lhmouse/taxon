@@ -184,7 +184,7 @@ class Value
     // overwritten with an empty array, and a reference to the new value is
     // returned.
     V_array&
-    mut_array() noexcept
+    open_array() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_array>())
           return *ptr;
@@ -194,22 +194,22 @@ class Value
 
     // Get a mutable range of an array.
     V_array::iterator
-    mut_array_begin() noexcept
-      { return this->mut_array().mut_begin();  }
+    open_array_begin() noexcept
+      { return this->open_array().mut_begin();  }
 
     V_array::iterator
-    mut_array_end() noexcept
-      { return this->mut_array().mut_end();  }
+    open_array_end() noexcept
+      { return this->open_array().mut_end();  }
 
     size_t
-    mut_array_size() noexcept
-      { return this->mut_array().size();  }
+    open_array_size() noexcept
+      { return this->open_array().size();  }
 
     // Sets an array.
     Value&
     operator=(const V_array& val) & noexcept
       {
-        this->mut_array() = val;
+        this->open_array() = val;
         return *this;
       }
 
@@ -247,7 +247,7 @@ class Value
     // it is overwritten with an empty object, and a reference to the new value is
     // returned.
     V_object&
-    mut_object() noexcept
+    open_object() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_object>())
           return *ptr;
@@ -257,22 +257,22 @@ class Value
 
     // Get a mutable range of an object.
     V_object::iterator
-    mut_object_begin() noexcept
-      { return this->mut_object().mut_begin();  }
+    open_object_begin() noexcept
+      { return this->open_object().mut_begin();  }
 
     V_object::iterator
-    mut_object_end() noexcept
-      { return this->mut_object().mut_end();  }
+    open_object_end() noexcept
+      { return this->open_object().mut_end();  }
 
     size_t
-    mut_object_size() noexcept
-      { return this->mut_object().size();  }
+    open_object_size() noexcept
+      { return this->open_object().size();  }
 
     // Sets an object.
     Value&
     operator=(const V_object& val) & noexcept
       {
-        this->mut_object() = val;
+        this->open_object() = val;
         return *this;
       }
 
@@ -297,7 +297,7 @@ class Value
     // value, it is overwritten with `false`, and a reference to the new value is
     // returned.
     V_boolean&
-    mut_boolean() noexcept
+    open_boolean() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_boolean>())
           return *ptr;
@@ -309,7 +309,7 @@ class Value
     Value&
     operator=(bool val) & noexcept
       {
-        this->mut_boolean() = val;
+        this->open_boolean() = val;
         return *this;
       }
 
@@ -344,7 +344,7 @@ class Value
     // Gets or creates an integer. If the stored value is not an integer value, it
     // is overwritten with zero, and a reference to the new value is returned.
     V_integer&
-    mut_integer() noexcept
+    open_integer() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_integer>())
           return *ptr;
@@ -357,21 +357,21 @@ class Value
     Value&
     operator=(int val) & noexcept
       {
-        this->mut_integer() = val;
+        this->open_integer() = val;
         return *this;
       }
 
     Value&
     operator=(long val) & noexcept
       {
-        this->mut_integer() = val;
+        this->open_integer() = val;
         return *this;
       }
 
     Value&
     operator=(long long val) & noexcept
       {
-        this->mut_integer() = val;
+        this->open_integer() = val;
         return *this;
       }
 
@@ -410,7 +410,7 @@ class Value
     // number, it is overwritten with zero, and a reference to the new value is
     // returned.
     V_number&
-    mut_number() noexcept
+    open_number() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_number>())
           return *ptr;
@@ -424,14 +424,14 @@ class Value
     Value&
     operator=(float val) & noexcept
       {
-        this->mut_number() = static_cast<double>(val);
+        this->open_number() = static_cast<double>(val);
         return *this;
       }
 
     Value&
     operator=(double val) & noexcept
       {
-        this->mut_number() = val;
+        this->open_number() = val;
         return *this;
       }
 
@@ -478,7 +478,7 @@ class Value
     // string, it is overwritten with an empty string, and a reference to the new
     // value is returned.
     V_string&
-    mut_string() noexcept
+    open_string() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_string>())
           return *ptr;
@@ -488,25 +488,25 @@ class Value
 
     // Get a mutable range of a character string.
     char*
-    mut_string_c_str() noexcept
-      { return this->mut_string().mut_data();  }
+    open_string_c_str() noexcept
+      { return this->open_string().mut_data();  }
 
     size_t
-    mut_string_length() noexcept
-      { return this->mut_string().length();  }
+    open_string_length() noexcept
+      { return this->open_string().length();  }
 
     // Set a character string.
     Value&
     operator=(const ::rocket::cow_string& val) & noexcept
       {
-        this->mut_string() = val;
+        this->open_string() = val;
         return *this;
       }
 
     Value&
     operator=(::rocket::shallow_string val) & noexcept
       {
-        this->mut_string() = val;
+        this->open_string() = val;
         return *this;
       }
 
@@ -515,7 +515,7 @@ class Value
     Value&
     operator=(const ycharT (*ps)[N]) & noexcept
       {
-        this->mut_string() = ps;
+        this->open_string() = ps;
         return *this;
       }
 
@@ -549,7 +549,7 @@ class Value
     // is overwritten with an empty string, and a reference to the new value is
     // returned.
     V_binary&
-    mut_binary() noexcept
+    open_binary() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_binary>())
           return *ptr;
@@ -559,18 +559,18 @@ class Value
 
     // Get a mutable range of a byte string.
     unsigned char*
-    mut_binary_data() noexcept
-      { return this->mut_binary().mut_data();  }
+    open_binary_data() noexcept
+      { return this->open_binary().mut_data();  }
 
     size_t
-    mut_binary_size() noexcept
-      { return this->mut_binary().length();  }
+    open_binary_size() noexcept
+      { return this->open_binary().length();  }
 
     // Set a byte string.
     Value&
     operator=(const ::rocket::cow_bstring& val) & noexcept
       {
-        this->mut_binary() = val;
+        this->open_binary() = val;
         return *this;
       }
 
@@ -595,7 +595,7 @@ class Value
     // is overwritten with a zero timestamp denoting `1970-01-01T00:00:00Z`, and a
     // reference to the new value is returned.
     V_time&
-    mut_time() noexcept
+    open_time() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_time>())
           return *ptr;
@@ -607,7 +607,7 @@ class Value
     Value&
     operator=(::std::chrono::system_clock::time_point val) & noexcept
       {
-        this->mut_time() = val;
+        this->open_time() = val;
         return *this;
       }
 
