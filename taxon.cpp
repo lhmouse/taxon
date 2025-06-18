@@ -36,17 +36,21 @@ do_mov_char(::rocket::cow_string* tok_opt, Parser_Context& ctx, ::rocket::tinybu
   {
     if(tok_opt) {
       // Move the current character from `ctx` to `*tok_opt`.
-      ::std::mbstate_t mbstate = { };
-      char mbs[MB_LEN_MAX];
-      size_t cr = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbstate);
-      if(static_cast<int>(cr) < 0)
-        return do_set_error(ctx, "character not representable in current locale");
+      if(ROCKET_EXPECT(ctx.c <= 0x7F))
+        tok_opt->push_back(static_cast<char>(ctx.c));
+      else {
+        ::std::mbstate_t mbstate = { };
+        char mbs[MB_LEN_MAX];
+        size_t cr = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbstate);
+        if(static_cast<int>(cr) < 0)
+          return do_set_error(ctx, "character not representable in current locale");
 
-      // If `c32rtomb()` has returned zero, then it is a null character.
-      if(cr <= 1)
-        tok_opt->push_back(mbs[0]);
-      else
-        tok_opt->append(mbs, cr);
+        // If `c32rtomb()` has returned zero, then it is a null character.
+        if(cr <= 1)
+          tok_opt->push_back(mbs[0]);
+        else
+          tok_opt->append(mbs, cr);
+      }
     }
 
     // Move the next character from `buf` to `ctx.c`. Source data must be UTF-8.
@@ -356,41 +360,45 @@ do_print_utf8_string_unquoted(::rocket::tinybuf& buf, const ::rocket::cow_string
     size_t cr;
 
     while(bptr != eptr) {
-      cr = ::std::mbrtoc16(&c16, bptr, static_cast<size_t>(eptr - bptr), &mbstate);
-      switch(static_cast<int>(cr))
-        {
-        case -3:
-          // No input has been consumed. A trailing surrogate has been stored into
-          // `c16`. Print `c16`.
-          break;
+      if(ROCKET_EXPECT(static_cast<unsigned char>(*bptr) <= 0x7F))
+        c16 = static_cast<unsigned char>(*(bptr ++));
+      else {
+        cr = ::std::mbrtoc16(&c16, bptr, static_cast<size_t>(eptr - bptr), &mbstate);
+        switch(static_cast<int>(cr))
+          {
+          case -3:
+            // No input has been consumed. A trailing surrogate has been stored into
+            // `c16`. Print `c16`.
+            break;
 
-        case -2:
-          // The input is incomplete, but has been consumed entirely. As we have
-          // passed the entire string, it must be invalid. Consume all bytes but
-          // print a replacement character.
-          bptr = eptr;
-          c16 = 0xFFFD;
-          break;
+          case -2:
+            // The input is incomplete, but has been consumed entirely. As we have
+            // passed the entire string, it must be invalid. Consume all bytes but
+            // print a replacement character.
+            bptr = eptr;
+            c16 = 0xFFFD;
+            break;
 
-        case -1:
-          // An invalid byte has been encountered. The `mbstate_t` structure is
-          // undefined and shall be reset for the next character. Consume one byte
-          // but print a replacement character.
-          mbstate = { };
-          bptr ++;
-          c16 = 0xFFFD;
-          break;
+          case -1:
+            // An invalid byte has been encountered. The `mbstate_t` structure is
+            // undefined and shall be reset for the next character. Consume one byte
+            // but print a replacement character.
+            mbstate = { };
+            bptr ++;
+            c16 = 0xFFFD;
+            break;
 
-        case 0:
-          // A null byte has been consumed and stored into `c16`.
-          bptr ++;
-          break;
+          case 0:
+            // A null byte has been consumed and stored into `c16`.
+            bptr ++;
+            break;
 
-        default:
-          // `cr` bytes have been consumed, converted and stored into `c16`.
-          bptr += cr;
-          break;
-        }
+          default:
+            // `cr` bytes have been consumed, converted and stored into `c16`.
+            bptr += cr;
+            break;
+          }
+      }
 
       switch(c16)
         {
