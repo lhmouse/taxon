@@ -470,7 +470,7 @@ Value::
 ~Value()
   {
     // Break deep recursion with a handwritten stack.
-    struct xVariant : Variant  { };
+    struct xVariant : variant_type  { };
     ::rocket::cow_vector<xVariant> stack;
 
   do_unpack_loop_:
@@ -494,7 +494,7 @@ Value::
     if(!stack.empty()) {
       // Destroy the this value. This will not result in recursion.
       ::rocket::destroy(&(this->m_stor));
-      ::rocket::construct(&(this->m_stor), static_cast<Variant&&>(stack.mut_back()));
+      ::rocket::construct(&(this->m_stor), static_cast<variant_type&&>(stack.mut_back()));
       stack.pop_back();
       goto do_unpack_loop_;
     }
@@ -513,7 +513,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     struct xFrame
       {
         char closure;
-        Variant* target;
+        variant_type* target;
         V_array* psa;
         V_object* pso;
       };
@@ -521,7 +521,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     ::rocket::cow_vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
-    Variant* pstor = &(this->m_stor);
+    variant_type* pstor = &(this->m_stor);
 
     do_get_token(token, ctx, buf);
     if(ctx.error)
@@ -950,7 +950,7 @@ print_to(::rocket::tinybuf& buf, Options opts) const
 
     ::rocket::cow_vector<xFrame> stack;
     ::rocket::ascii_numput nump;
-    const Variant* pstor = &(this->m_stor);
+    const variant_type* pstor = &(this->m_stor);
 
   do_unpack_loop_:
     switch(static_cast<Type>(pstor->index()))

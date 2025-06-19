@@ -61,7 +61,6 @@ using V_object  = ::rocket::cow_hashmap<rocket::phcow_string,
 
 // Define type enumerators such as `t_null`, `t_array`, `t_number`, and so on.
 enum Type : uint8_t { TAXON_TYPES_IEZUVAH3_(t) };
-using Variant = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
 
 // This value controls the behavior of both the parser and the formatter. Multiple
 // options may combined with bitwise OR.
@@ -108,7 +107,8 @@ struct Parser_Context
 class Value
   {
   private:
-    Variant m_stor;
+    using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
+    variant_type m_stor;
 
   public:
     // Initializes a null value.
