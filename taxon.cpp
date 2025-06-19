@@ -37,10 +37,10 @@ is_any(int c, Ts... accept_set)
   }
 
 void
-do_err(Parser_Context& ctx, ::rocket::tinybuf& buf, const char* error)
+do_err(Parser_Context& ctx, const char* error)
   {
     ctx.c = -1;
-    ctx.offset = buf.tell();
+    ctx.offset = ctx.saved_offset;
     ctx.error = error;
   }
 
@@ -56,7 +56,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
       ::std::mbstate_t mbst = { };
       size_t mblen = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbst);
       if(static_cast<int>(mblen) < 0)
-        return do_err(ctx, buf, "Character not representable in current locale");
+        return do_err(ctx, "Character not representable in current locale");
 
       // `c32rtomb()` may return zero for a null character.
       if(ROCKET_EXPECT(mblen <= 1))
@@ -68,9 +68,9 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
     // Move the next character from `buf` to `ctx.c`. Source text must be UTF-8.
     ctx.c = buf.getc();
     if(ctx.c == -1)
-      return do_err(ctx, buf, "End of input stream");
+      return do_err(ctx, "End of input stream");
     else if(is_within(ctx.c, 0x80, 0xBF))
-      return do_err(ctx, buf, "Invalid UTF-8 byte");
+      return do_err(ctx, "Invalid UTF-8 byte");
 
     if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
       int u8len = ROCKET_LZCNT32(static_cast<uint32_t>(~ ctx.c) << 24);
@@ -79,7 +79,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
       for(int k = 1;  k < u8len;  ++k) {
         int next = buf.getc();
         if(!is_within(next, 0x80, 0xBF))
-          return do_err(ctx, buf, "Invalid UTF-8 sequence");
+          return do_err(ctx, "Invalid UTF-8 sequence");
         else {
           ctx.c <<= 6;
           ctx.c |= next & 0x3F;
@@ -90,27 +90,24 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
           || (ctx.c < (1 << (u8len * 5 - 4)))  // overlong
           || is_within(ctx.c, 0xD800, 0xDFFF)  // surrogates
           || (ctx.c > 0x10FFFF))
-        return do_err(ctx, buf, "Invalid UTF character");
+        return do_err(ctx, "Invalid UTF character");
     }
   }
 
 void
 do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    // There's assumed to be whitespace before any token.
-    if(ctx.c == -1)
-      ctx.c = '\t';
+    // Clear the current token and skip whitespace.
+    ctx.saved_offset = buf.tell();
+    ctx.error = nullptr;
 
+    if(ctx.c == -1)
+      do_mov(token, ctx, buf);
     while(is_any(ctx.c, '\t', '\r', '\n', ' '))
       do_mov(token, ctx, buf);
-
+    token.clear();
     if(ctx.c == -1)
       return;
-
-    // Clear the current token.
-    token.clear();
-    ctx.offset = buf.tell();
-    ctx.error = nullptr;
 
     switch(ctx.c)
       {
@@ -140,7 +137,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         if(ctx.c == '.') {
           do_mov(token, ctx, buf);
           if(!is_within(ctx.c, '0', '9'))
-            return do_err(ctx, buf, "Invalid number");
+            return do_err(ctx, "Invalid number");
           else {
             do
               do_mov(token, ctx, buf);
@@ -153,7 +150,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
           if(is_any(ctx.c, '+', '-'))
             do_mov(token, ctx, buf);
           if(!is_within(ctx.c, '0', '9'))
-            return do_err(ctx, buf, "Invalid number");
+            return do_err(ctx, "Invalid number");
           else {
             do
               do_mov(token, ctx, buf);
@@ -191,16 +188,16 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         do_mov(token, ctx, buf);
         while(ctx.c != '"')
           if(ctx.c == -1)
-            return do_err(ctx, buf, "String not terminated properly");
+            return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
-            return do_err(ctx, buf, "Control character not allowed in string");
+            return do_err(ctx, "Control character not allowed in string");
           else if(ctx.c != '\\')
             do_mov(token, ctx, buf);
           else {
             // Read an escape sequence.
             int next = buf.getc();
             if(next == -1)
-              return do_err(ctx, buf, "Incomplete escape sequence");
+              return do_err(ctx, "Incomplete escape sequence");
             else if(is_any(next, '\\', '\"', '/'))
               ctx.c = next;
             else if(next == 'b')
@@ -217,35 +214,35 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
               // Read the first UTF-16 code unit.
               char temp[16] = "0x";
               if(buf.getn(temp + 2, 4) != 4)
-                return do_err(ctx, buf, "Invalid escape sequence");
+                return do_err(ctx, "Invalid escape sequence");
 
               ::rocket::ascii_numget numg;
               if(numg.parse_XU(temp, 6) != 6)
-                return do_err(ctx, buf, "Invalid hexadecimal digit");
+                return do_err(ctx, "Invalid hexadecimal digit");
 
               uint64_t high;
               numg.cast_U(high, 0, UINT64_MAX);
               ctx.c = static_cast<int>(high);
               if(is_within(ctx.c, 0xDC00, 0xDFFF))
-                return do_err(ctx, buf, "Dangling UTF-16 trailing surrogate");
+                return do_err(ctx, "Dangling UTF-16 trailing surrogate");
 
               if(is_within(ctx.c, 0xD800, 0xDBFF)) {
                 // Look for a trailing surrogate.
                 if(buf.getn(temp, 6) != 6)
-                  return do_err(ctx, buf, "Missing UTF-16 trailing surrogate");
+                  return do_err(ctx, "Missing UTF-16 trailing surrogate");
 
                 if(::std::memcmp(temp, "\\u", 2) != 0)
-                  return do_err(ctx, buf, "Missing UTF-16 trailing surrogate");
+                  return do_err(ctx, "Missing UTF-16 trailing surrogate");
 
                 ::std::memcpy(temp, "0x", 2);
                 if(numg.parse_XU(temp, 6) != 6)
-                  return do_err(ctx, buf, "Invalid hexadecimal digit");
+                  return do_err(ctx, "Invalid hexadecimal digit");
 
                 uint64_t low;
                 numg.cast_U(low, 0, UINT64_MAX);
                 ctx.c = static_cast<int>(low);
                 if(!is_within(ctx.c, 0xDC00, 0xDFFF))
-                  return do_err(ctx, buf, "Missing UTF-16 trailing surrogate");
+                  return do_err(ctx, "Missing UTF-16 trailing surrogate");
 
                 ctx.c &= 0x3FF;
                 ctx.c |= static_cast<int>(high << 10 & 0xFFC00);
@@ -266,7 +263,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         break;
 
       default:
-        return do_err(ctx, buf, "Invalid UTF-8 byte");
+        return do_err(ctx, "Invalid character");
       }
   }
 
@@ -381,6 +378,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     // Initialize parser state.
     ctx.c = -1;
     ctx.offset = -1;
+    ctx.saved_offset = 0;
     ctx.error = nullptr;
 
     // Break deep recursion with a handwritten stack.
@@ -402,13 +400,13 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
 
   do_pack_value_loop_:
     if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
-      return do_err(ctx, buf, "Nesting limit exceeded");
+      return do_err(ctx, "Nesting limit exceeded");
 
     if(token[0] == '[') {
       // array
       do_token(token, ctx, buf);
       if(token.empty())
-        return do_err(ctx, buf, "Array not terminated properly");
+        return do_err(ctx, "Array not terminated properly");
       else if(ctx.error)
         return;
 
@@ -428,7 +426,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       // object
       do_token(token, ctx, buf);
       if(token.empty())
-        return do_err(ctx, buf, "Object not terminated properly");
+        return do_err(ctx, "Object not terminated properly");
       else if(ctx.error)
         return;
 
@@ -436,18 +434,18 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         // We are inside an object, so this token must be a key string, followed
         // by a colon, followed by its value.
         if(token[0] != '"')
-          return do_err(ctx, buf, "Missing key string");
+          return do_err(ctx, "Missing key string");
 
         rocket::phcow_string key;
         key.assign(token.data() + 1, token.size() - 1);
 
         do_token(token, ctx, buf);
         if(token != ":")
-          return do_err(ctx, buf, "Missing colon");
+          return do_err(ctx, "Missing colon");
 
         do_token(token, ctx, buf);
         if(token.empty())
-          return do_err(ctx, buf, "Missing value");
+          return do_err(ctx, "Missing value");
         else if(ctx.error)
           return;
 
@@ -469,7 +467,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       numg.parse_DD(token.data(), token.size());
       numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
       if(numg.overflowed())
-        return do_err(ctx, buf, "Number value out of range");
+        return do_err(ctx, "Number value out of range");
     }
     else if(token[0] == '\"') {
       // string
@@ -480,16 +478,16 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       else if(token.starts_with("\"$l:")) {
         // 64-bit integer
         if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, buf, "Invalid 64-bit integer");
+          return do_err(ctx, "Invalid 64-bit integer");
 
         numg.cast_I(pstor->emplace<V_integer>(), INT64_MIN, INT64_MAX);
         if(numg.overflowed())
-          return do_err(ctx, buf, "64-bit integer value out of range");
+          return do_err(ctx, "64-bit integer value out of range");
       }
       else if(token.starts_with("\"$d:")) {
         // double-precision number
         if(numg.parse_D(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, buf, "Invalid double-precision number");
+          return do_err(ctx, "Invalid double-precision number");
 
         // Values that are out of range are converted to infinities and are
         // always accepted.
@@ -502,7 +500,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       else if(token.starts_with("\"$t:")) {
         // timestamp in milliseconds
         if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, buf, "Invalid timestamp");
+          return do_err(ctx, "Invalid timestamp");
 
         // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
         // '9999-12-31T23:59:59.999Z'.
@@ -510,13 +508,13 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         numg.cast_I(count, -2208988800000, 253402300799999);
         pstor->emplace<V_time>(::std::chrono::milliseconds(count));
         if(numg.overflowed())
-          return do_err(ctx, buf, "Timestamp value out of range");
+          return do_err(ctx, "Timestamp value out of range");
       }
       else if(token.starts_with("\"$h:")) {
         // hex-encoded data
         size_t units = (token.size() - 4) / 2;
         if(units * 2 != token.size() - 4)
-          return do_err(ctx, buf, "Invalid hex string");
+          return do_err(ctx, "Invalid hex string");
 
         auto& bin = pstor->emplace<V_binary>();
         bin.reserve(units);
@@ -535,7 +533,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
             else if(is_within(c, 'a', 'f'))
               value |= static_cast<uint32_t>(c - 'a' + 10);
             else
-              return do_err(ctx, buf, "Invalid hex digit");
+              return do_err(ctx, "Invalid hex digit");
           }
 
           bin.push_back(static_cast<uint8_t>(value));
@@ -546,7 +544,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         // base64-encoded data
         size_t units = (token.size() - 4) / 4;
         if(units * 4 != token.size() - 4)
-          return do_err(ctx, buf, "Invalid base64 string");
+          return do_err(ctx, "Invalid base64 string");
 
         auto& bin = pstor->emplace<V_binary>();
         bin.reserve(units);
@@ -573,10 +571,10 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
               if(k >= 2)
                 out_bytes --;
               else
-                return do_err(ctx, buf, "Invalid base64 string");
+                return do_err(ctx, "Invalid base64 string");
             }
             else
-              return do_err(ctx, buf, "Invalid base64 digit");
+              return do_err(ctx, "Invalid base64 digit");
           }
 
           uint32_t temp = ROCKET_HTOBE32(value << 8);
@@ -585,7 +583,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         }
       }
       else
-       return do_err(ctx, buf, "Unknown type annotator");
+       return do_err(ctx, "Unknown type annotator");
     }
     else if(token == "null")
       pstor->emplace<V_null>();
@@ -594,7 +592,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
     else if(token == "false")
       pstor->emplace<V_boolean>(false);
     else
-      return do_err(ctx, buf, "Invalid token");
+      return do_err(ctx, "Invalid token");
 
     while(!stack.empty()) {
       auto& frm = stack.back();
@@ -602,14 +600,14 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         // array
         do_token(token, ctx, buf);
         if(token.empty())
-          return do_err(ctx, buf, "Array not terminated properly");
+          return do_err(ctx, "Array not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
           do_token(token, ctx, buf);
           if(token.empty())
-            return do_err(ctx, buf, "Missing value");
+            return do_err(ctx, "Missing value");
           else if(ctx.error)
             return;
 
@@ -619,39 +617,39 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         }
 
         if(token[0] != ']')
-          return do_err(ctx, buf, "Missing comma or closed bracket");
+          return do_err(ctx, "Missing comma or closed bracket");
       }
       else {
         // object
         do_token(token, ctx, buf);
         if(token.empty())
-          return do_err(ctx, buf, "Object not terminated properly");
+          return do_err(ctx, "Object not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
           do_token(token, ctx, buf);
           if(token.empty())
-            return do_err(ctx, buf, "Missing key string");
+            return do_err(ctx, "Missing key string");
           else if(ctx.error)
             return;
 
           if(token[0] != '"')
-            return do_err(ctx, buf, "Missing key string");
+            return do_err(ctx, "Missing key string");
 
           rocket::phcow_string key;
           key.assign(token.data() + 1, token.size() - 1);
           auto result = frm.pso->try_emplace(::std::move(key), nullptr);
           if(!result.second)
-            return do_err(ctx, buf, "Duplicate key string");
+            return do_err(ctx, "Duplicate key string");
 
           do_token(token, ctx, buf);
           if(token != ":")
-            return do_err(ctx, buf, "Missing colon");
+            return do_err(ctx, "Missing colon");
 
           do_token(token, ctx, buf);
           if(ctx.error)
-            return do_err(ctx, buf, "Missing value");
+            return do_err(ctx, "Missing value");
 
           // next
           pstor = &(result.first->second.m_stor);
@@ -659,7 +657,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
         }
 
         if(token[0] != '}')
-          return do_err(ctx, buf, "Missing comma or closed brace");
+          return do_err(ctx, "Missing comma or closed brace");
       }
 
       // close

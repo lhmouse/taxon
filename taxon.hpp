@@ -99,7 +99,7 @@ struct Parser_Context
     // !! internal fields !!
     int32_t c;
     uint32_t reserved_1;
-    int64_t reserved_2;
+    int64_t saved_offset;
   };
 
 // This is the only and comprehensive class that is provided by this library. It is

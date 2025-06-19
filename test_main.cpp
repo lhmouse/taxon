@@ -317,6 +317,71 @@ main(void)
     }
 
     {
+      ::taxon::Value val;
+      ::taxon::Parser_Context ctx;
+
+      val.parse_with(ctx, &R"(#)");
+      assert(ctx.offset == 0);
+      assert(::std::strcmp(ctx.error, "Invalid character") == 0);
+
+      val.parse_with(ctx, &R"([)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "Array not terminated properly") == 0);
+
+      val.parse_with(ctx, &R"([1)");
+      assert(ctx.offset == 2);
+      assert(::std::strcmp(ctx.error, "Array not terminated properly") == 0);
+
+      val.parse_with(ctx, &R"([1,)");
+      assert(ctx.offset == 3);
+      assert(::std::strcmp(ctx.error, "Missing value") == 0);
+
+      val.parse_with(ctx, &R"([1,])");
+      assert(ctx.offset == 3);
+      assert(::std::strcmp(ctx.error, "Invalid token") == 0);
+
+      val.parse_with(ctx, &R"({)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "Object not terminated properly") == 0);
+
+      val.parse_with(ctx, &R"({x)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "Missing key string") == 0);
+
+      val.parse_with(ctx, &R"({true)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "Missing key string") == 0);
+
+      val.parse_with(ctx, &R"({"x)");
+      assert(ctx.offset == 1);
+      assert(::std::strcmp(ctx.error, "String not terminated properly") == 0);
+
+      val.parse_with(ctx, &R"({"x")");
+      assert(ctx.offset == 4);
+      assert(::std::strcmp(ctx.error, "Missing colon") == 0);
+
+      val.parse_with(ctx, &R"({"x"1)");
+      assert(ctx.offset == 4);
+      assert(::std::strcmp(ctx.error, "Missing colon") == 0);
+
+      val.parse_with(ctx, &R"({"x":)");
+      assert(ctx.offset == 5);
+      assert(::std::strcmp(ctx.error, "Missing value") == 0);
+
+      val.parse_with(ctx, &R"({"x":42)");
+      assert(ctx.offset == 7);
+      assert(::std::strcmp(ctx.error, "Object not terminated properly") == 0);
+
+      val.parse_with(ctx, &R"({"x":42,)");
+      assert(ctx.offset == 8);
+      assert(::std::strcmp(ctx.error, "Missing key string") == 0);
+
+      val.parse_with(ctx, &R"({"x":42,})");
+      assert(ctx.offset == 8);
+      assert(::std::strcmp(ctx.error, "Missing key string") == 0);
+    }
+
+    {
       // recursion
       ::taxon::Value val;
       constexpr ::std::size_t N = 1000000;
