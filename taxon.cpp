@@ -377,7 +377,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
     // Initialize parser state.
     ctx.c = -1;
-    ctx.offset = -1;
+    ctx.offset = 0;
     ctx.saved_offset = 0;
     ctx.error = nullptr;
 
@@ -595,7 +595,7 @@ parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
       return do_err(ctx, "Invalid token");
 
     while(!stack.empty()) {
-      auto& frm = stack.back();
+      const auto& frm = stack.back();
       if(frm.psa) {
         // array
         do_token(token, ctx, buf);
@@ -716,7 +716,6 @@ print_to(::rocket::tinybuf& buf, Options opts) const
     // Break deep recursion with a handwritten stack.
     struct xFrame
       {
-        char closure;
         const V_array* psa;
         V_array::const_iterator ita;
         const V_object* pso;
@@ -738,7 +737,6 @@ print_to(::rocket::tinybuf& buf, Options opts) const
         if(!pstor->as<V_array>().empty()) {
           // open
           auto& frm = stack.emplace_back();
-          frm.closure = ']';
           frm.psa = &(pstor->as<V_array>());
           frm.ita = frm.psa->begin();
           buf.putc('[');
@@ -753,7 +751,6 @@ print_to(::rocket::tinybuf& buf, Options opts) const
         if(!pstor->as<V_object>().empty()) {
           // open
           auto& frm = stack.emplace_back();
-          frm.closure = '}';
           frm.pso = &(pstor->as<V_object>());
           frm.ito = frm.pso->begin();
           buf.putn("{\"", 2);
@@ -967,34 +964,34 @@ print_to(::rocket::tinybuf& buf, Options opts) const
 
     while(!stack.empty()) {
       auto& frm = stack.mut_back();
-      switch(frm.closure)
-        {
-        case ']':
-          if(++ frm.ita != frm.psa->end()) {
-            // next
-            buf.putc(',');
-            pstor = &(frm.ita->m_stor);
-            goto do_unpack_loop_;
-          }
-          break;
-
-        case '}':
-          if(++ frm.ito != frm.pso->end()) {
-            // next
-            buf.putn(",\"", 2);
-            do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
-            buf.putn("\":", 2);
-            pstor = &(frm.ito->second.m_stor);
-            goto do_unpack_loop_;
-          }
-          break;
-
-        default:
-          ROCKET_UNREACHABLE();
+      if(frm.psa) {
+        // array
+        if(++ frm.ita != frm.psa->end()) {
+          // next
+          buf.putc(',');
+          pstor = &(frm.ita->m_stor);
+          goto do_unpack_loop_;
         }
 
+        // end
+        buf.putc(']');
+      }
+      else {
+        // object
+        if(++ frm.ito != frm.pso->end()) {
+          // next
+          buf.putn(",\"", 2);
+          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
+          buf.putn("\":", 2);
+          pstor = &(frm.ito->second.m_stor);
+          goto do_unpack_loop_;
+        }
+
+        // end
+        buf.putc('}');
+      }
+
       // close
-      buf.putc(frm.closure);
       stack.pop_back();
     }
   }
