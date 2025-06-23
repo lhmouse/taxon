@@ -67,14 +67,14 @@ main(void)
       ::taxon::Value val;
       assert(val.type() == ::taxon::t_null);
       assert(val.is_null());
-      assert(val.print_to_string() == "null");
+      assert(val.to_string() == "null");
     }
 
     {
       ::taxon::Value val = nullptr;
       assert(val.type() == ::taxon::t_null);
       assert(val.is_null());
-      assert(val.print_to_string() == "null");
+      assert(val.to_string() == "null");
     }
 
     {
@@ -89,7 +89,7 @@ main(void)
       assert(val.as_array().at(1).as_string() == "hello");
       assert(val.as_array().at(2).type() == ::taxon::t_boolean);
       assert(val.as_array().at(2).as_boolean() == false);
-      assert(val.print_to_string() == R"(["$l:1","hello",false])");
+      assert(val.to_string() == R"(["$l:1","hello",false])");
     }
 
     {
@@ -102,8 +102,8 @@ main(void)
       assert(val.as_object().at(&"x").as_number() == 3.5);
       assert(val.as_object().at(&"y").type() == ::taxon::t_string);
       assert(val.as_object().at(&"y").as_string() == "hello");
-      assert(val.print_to_string() == R"({"x":3.5,"y":"hello"})"
-             || val.print_to_string() == R"({"y":"hello","x":3.5})");
+      assert(val.to_string() == R"({"x":3.5,"y":"hello"})"
+             || val.to_string() == R"({"y":"hello","x":3.5})");
     }
 
     {
@@ -111,7 +111,7 @@ main(void)
       assert(val.type() == ::taxon::t_boolean);
       assert(val.is_boolean());
       assert(val.as_boolean() == true);
-      assert(val.print_to_string() == "true");
+      assert(val.to_string() == "true");
 
       val.open_integer() = 42;
       assert(val.type() == ::taxon::t_integer);
@@ -124,7 +124,7 @@ main(void)
       assert(val.type() == ::taxon::t_integer);
       assert(val.is_integer());
       assert(val.as_integer() == 0);
-      assert(val.print_to_string() == R"("$l:0")");
+      assert(val.to_string() == R"("$l:0")");
 
       val.open_number() = -5;
       assert(val.is_number());
@@ -136,7 +136,7 @@ main(void)
       assert(val.type() == ::taxon::t_integer);
       assert(val.is_integer());
       assert(val.as_integer() == INT64_MAX);
-      assert(val.print_to_string() == R"("$l:9223372036854775807")");
+      assert(val.to_string() == R"("$l:9223372036854775807")");
     }
 
     {
@@ -144,7 +144,7 @@ main(void)
       assert(val.type() == ::taxon::t_integer);
       assert(val.is_integer());
       assert(val.as_integer() == INT64_MIN);
-      assert(val.print_to_string() == R"("$l:-9223372036854775808")");
+      assert(val.to_string() == R"("$l:-9223372036854775808")");
     }
 
     {
@@ -152,7 +152,7 @@ main(void)
       assert(val.type() == ::taxon::t_number);
       assert(val.is_number());
       assert(val.as_number() == 1.5);
-      assert(val.print_to_string() == "1.5");
+      assert(val.to_string() == "1.5");
 
       val = &"world";
       assert(val.type() == ::taxon::t_string);
@@ -167,7 +167,7 @@ main(void)
       assert(val.type() == ::taxon::t_number);
       assert(val.is_number());
       assert(::std::isnan(val.as_number()));
-      assert(val.print_to_string() == R"("$d:nan")");
+      assert(val.to_string() == R"("$d:nan")");
     }
 
     {
@@ -176,7 +176,7 @@ main(void)
       assert(val.is_number());
       assert(val.as_number() == 42.0);
       assert(val.type() == ::taxon::t_integer);
-      assert(val.print_to_string() == R"("$l:42")");
+      assert(val.to_string() == R"("$l:42")");
     }
 
     {
@@ -187,7 +187,7 @@ main(void)
       assert(val.as_string() == "\b\f\n\r\t\x1B\x7F");
       assert(val.as_string_length() == 7);
       assert(::memcmp(val.as_string_c_str(), "\b\f\n\r\t\x1B\x7F", 8) == 0);
-      assert(val.print_to_string() == R"("\b\f\n\r\t\u001B\u007F")");
+      assert(val.to_string() == R"("\b\f\n\r\t\u001B\u007F")");
 
       static constexpr unsigned char bytes[] = "\xFF\x00\xFE\x7F\x80";
       val = ::rocket::cow_bstring(bytes, 5);
@@ -196,7 +196,7 @@ main(void)
       assert(val.as_binary().compare(bytes, 5) == 0);
       assert(val.as_binary_size() == 5);
       assert(::memcmp(val.as_binary_data(), bytes, 5) == 0);
-      assert(val.print_to_string() == R"("$b:/wD+f4A=")");
+      assert(val.to_string() == R"("$b:/wD+f4A=")");
     }
 
     {
@@ -209,7 +209,7 @@ main(void)
       assert(val.as_binary().compare(bytes, 12) == 0);
       assert(val.as_binary_size() == 12);
       assert(::memcmp(val.as_binary_data(), bytes, 13) == 0);
-      assert(val.print_to_string() == R"("$h:c9890d33a39b0e858833447c")");
+      assert(val.to_string() == R"("$h:c9890d33a39b0e858833447c")");
 
       static constexpr ::std::chrono::milliseconds dur(123456789);
       static constexpr ::std::chrono::system_clock::time_point tp(dur);
@@ -226,7 +226,7 @@ main(void)
       assert(val.type() == ::taxon::t_time);
       assert(val.is_time());
       assert(val.as_time() == tp);
-      assert(val.print_to_string() == R"("$t:123456789")");
+      assert(val.to_string() == R"("$t:123456789")");
 
       val = false;
       assert(val.type() == ::taxon::t_boolean);
@@ -244,7 +244,7 @@ main(void)
       val.open_array().mut(3).open_array().resize(2);
       val.open_array().mut(3).open_array().mut(0) = 37;
       val.open_array().mut(3).open_array().mut(1) = nullptr;
-      assert(val.print_to_string() == R"(["$s:$meow",{"x":true},12.5,["$l:37",null]])");
+      assert(val.to_string() == R"(["$s:$meow",{"x":true},12.5,["$l:37",null]])");
     }
 
     {
@@ -395,7 +395,7 @@ main(void)
       str.append(N, '[');
       str.append("null", 4);
       str.append(N, ']');
-      assert(val.print_to_string() == str);
+      assert(val.to_string() == str);
     }
 
     // leak check

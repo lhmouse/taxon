@@ -1015,7 +1015,7 @@ print_to(::std::FILE* fp, Options opts) const
 
 ::rocket::cow_string
 Value::
-print_to_string(Options opts) const
+to_string(Options opts) const
   {
     ::rocket::tinybuf_str buf(::rocket::tinybuf::open_write);
     this->print_to(buf, opts);

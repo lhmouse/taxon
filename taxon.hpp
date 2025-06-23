@@ -653,7 +653,7 @@ class Value
     print_to(::std::FILE* fp, Options opts = options_default) const;
 
     ::rocket::cow_string
-    print_to_string(Options opts = options_default) const;
+    to_string(Options opts = options_default) const;
 
     void
     print_to_stderr(Options opts = options_default) const;
