@@ -678,7 +678,7 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
   {
-    ::rocket::tinybuf_file buf(fp, nullptr);
+    ::rocket::tinybuf_file buf(fp);
     this->parse_with(ctx, buf, opts);
   }
 
@@ -1009,7 +1009,7 @@ void
 Value::
 print_to(::std::FILE* fp, Options opts) const
   {
-    ::rocket::tinybuf_file buf(fp, nullptr);
+    ::rocket::tinybuf_file buf(fp);
     this->print_to(buf, opts);
   }
 
@@ -1026,7 +1026,7 @@ void
 Value::
 print_to_stderr(Options opts) const
   {
-    ::rocket::tinybuf_file buf(stderr, nullptr);
+    ::rocket::tinybuf_file buf(stderr);
     this->print_to(buf, opts);
   }
 
