@@ -91,6 +91,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
     }
   }
 
+ROCKET_FLATTEN
 void
 do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
