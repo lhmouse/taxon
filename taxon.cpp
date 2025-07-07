@@ -30,10 +30,7 @@ constexpr ROCKET_ALWAYS_INLINE
 bool
 is_any(int c, Ts... accept_set)
   {
-    for(int m : { accept_set... })
-      if(c == m)
-        return true;
-    return false;
+    return (... || (c == accept_set));
   }
 
 void
