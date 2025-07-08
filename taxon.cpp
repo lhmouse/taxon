@@ -42,37 +42,17 @@ do_err(Parser_Context& ctx, const char* error)
   }
 
 void
-do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+do_load_next(Parser_Context& ctx, ::rocket::tinybuf& buf)
   {
-    // Move the current character from `ctx.c` to `token`.
-    if(ROCKET_EXPECT(ctx.c <= 0x7F))
-      token.push_back(static_cast<char>(ctx.c));
-    else {
-      // Write this multibyte character in the current locale.
-      char mbs[MB_LEN_MAX];
-      ::std::mbstate_t mbst = { };
-      size_t mblen = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbst);
-      if(static_cast<int>(mblen) < 0)
-        return do_err(ctx, "Character not representable in current locale");
-
-      // `c32rtomb()` may return zero for a null character.
-      if(ROCKET_EXPECT(mblen <= 1))
-        token.push_back(mbs[0]);
-      else
-        token.append(mbs, mblen);
-    }
-
-    // Move the next character from `buf` to `ctx.c`. Source text must be UTF-8.
     ctx.c = buf.getc();
     if(ctx.c == -1)
       return do_err(ctx, "End of input stream");
     else if(is_within(ctx.c, 0x80, 0xBF))
       return do_err(ctx, "Invalid UTF-8 byte");
-
-    if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
-      int u8len = ROCKET_LZCNT32(static_cast<uint32_t>(~ ctx.c) << 24);
-      ctx.c &= 1 << (7 - u8len);
-
+    else if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
+      // Parse a multibyte Unicode character.
+      int u8len = ROCKET_LZCNT32(static_cast<uint32_t>(ctx.c ^ -1) << 24);
+      ctx.c &= (1 << (7 - u8len)) - 1;
       for(int k = 1;  k < u8len;  ++k) {
         int next = buf.getc();
         if(!is_within(next, 0x80, 0xBF))
@@ -91,6 +71,30 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
     }
   }
 
+void
+do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+  {
+    char mbs[MB_LEN_MAX];
+    size_t mblen = 1;
+
+    mbs[0] = static_cast<char>(ctx.c);
+    if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
+      // Write this multibyte character in the current locale.
+      ::std::mbstate_t mbst = { };
+      mblen = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbst);
+      if(static_cast<int>(mblen) < 0)
+        return do_err(ctx, "Character not representable in current locale");
+    }
+
+    // Always write one character, since `c32rtomb()` may return zero for a
+    // null character.
+    token.push_back(mbs[0]);
+    if(ROCKET_UNEXPECT(mblen > 1))
+      token.append(mbs + 1, mblen - 1);
+
+    do_load_next(ctx, buf);
+  }
+
 ROCKET_FLATTEN
 void
 do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
@@ -98,12 +102,12 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
     // Clear the current token and skip whitespace.
     ctx.saved_offset = buf.tell();
     ctx.error = nullptr;
+    token.clear();
 
     if(ctx.c == -1)
-      do_mov(token, ctx, buf);
+      do_load_next(ctx, buf);
     while(is_any(ctx.c, '\t', '\r', '\n', ' '))
-      do_mov(token, ctx, buf);
-    token.clear();
+      do_load_next(ctx, buf);
     if(ctx.c == -1)
       return;
 

@@ -317,6 +317,15 @@ main(void)
     }
 
     {
+      static constexpr char source[] = R"("причудливый multilingual テスト文字")";
+      ::taxon::Value val;
+      assert(val.parse(&source));
+      assert(val.is_string());
+      assert(val.as_string_length() == 51);
+      assert(::std::memcmp(val.as_string_c_str(), "причудливый multilingual テスト文字", 52) == 0);
+    }
+
+    {
       ::taxon::Value val;
       ::taxon::Parser_Context ctx;
 
