@@ -175,7 +175,7 @@ void
 do_load_next(Parser_Context& ctx, Unified_Source usrc)
   {
     ctx.c = usrc.getc();
-    if(ctx.c == -1)
+    if(ctx.c < 0)
       return do_err(ctx, "End of input stream");
     else if(is_within(ctx.c, 0x80, 0xBF))
       return do_err(ctx, "Invalid UTF-8 byte");
@@ -234,11 +234,11 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
     ctx.error = nullptr;
     token.clear();
 
-    if(ctx.c == -1)
+    if(ctx.c < 0)
       do_load_next(ctx, usrc);
     while(is_any(ctx.c, '\t', '\r', '\n', ' '))
       do_load_next(ctx, usrc);
-    if(ctx.c == -1)
+    if(ctx.c < 0)
       return;
 
     switch(ctx.c)
@@ -319,7 +319,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         // terminating double-quote character is appended.
         do_mov(token, ctx, usrc);
         while(ctx.c != '"')
-          if(ctx.c == -1)
+          if(ctx.c < 0)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
@@ -328,7 +328,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
           else {
             // Read an escape sequence.
             int next = usrc.getc();
-            if(next == -1)
+            if(next < 0)
               return do_err(ctx, "Incomplete escape sequence");
             else if(is_any(next, '\\', '\"', '/'))
               ctx.c = next;
