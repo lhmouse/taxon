@@ -3,8 +3,7 @@
 
 #define TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
 #include "taxon.hpp"
-#include <rocket/tinybuf_str.hpp>
-#include <rocket/tinybuf_file.hpp>
+#include <rocket/tinybuf.hpp>
 #include <rocket/ascii_numput.hpp>
 #include <rocket/ascii_numget.hpp>
 #include <cmath>
@@ -87,45 +86,51 @@ struct Memory_Source
 
 struct Unified_Source
   {
-    Memory_Source mem = { };
+    Memory_Source* mem = nullptr;
     ::rocket::tinybuf* buf = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Source(const char* s, size_t n) : mem(s, n)  { }
+    Unified_Source(Memory_Source* m) : mem(m)  { }
     Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
     Unified_Source(::std::FILE* f) : fp(f)  { }
 
     int
     getc()
       {
-        if(this->mem.bptr)
-          return this->mem.getc();
+        if(this->mem)
+          return this->mem->getc();
         else if(this->buf)
           return this->buf->getc();
         else if(this->fp)
           return ::fgetc(this->fp);
+        else
+          ROCKET_UNREACHABLE();
       }
 
     size_t
     getn(char* s, size_t n)
       {
-        if(this->mem.bptr)
-          return this->mem.getn(s, n);
+        if(this->mem)
+          return this->mem->getn(s, n);
         else if(this->buf)
           return this->buf->getn(s, n);
         else if(this->fp)
           return ::fread(s, 1, n, this->fp);
+        else
+          ROCKET_UNREACHABLE();
       }
 
     int64_t
     tell()
       {
-        if(this->mem.bptr)
-          return this->mem.tell();
+        if(this->mem)
+          return this->mem->tell();
         else if(this->buf)
           return this->buf->tell();
         else if(this->fp)
           return ::ftello(this->fp);
+        else
+          ROCKET_UNREACHABLE();
       }
   };
 
@@ -148,6 +153,8 @@ struct Unified_Sink
           this->buf->putc(c);
         else if(this->fp)
           ::fputc(c, this->fp);
+        else
+          ROCKET_UNREACHABLE();
       }
 
     void
@@ -159,13 +166,15 @@ struct Unified_Sink
           this->buf->putn(s, n);
         else if(this->fp)
           ::fwrite(s, 1, n, this->fp);
+        else
+          ROCKET_UNREACHABLE();
       }
   };
 
 void
-do_load_next(Parser_Context& ctx, ::rocket::tinybuf& buf)
+do_load_next(Parser_Context& ctx, Unified_Source usrc)
   {
-    ctx.c = buf.getc();
+    ctx.c = usrc.getc();
     if(ctx.c == -1)
       return do_err(ctx, "End of input stream");
     else if(is_within(ctx.c, 0x80, 0xBF))
@@ -175,7 +184,7 @@ do_load_next(Parser_Context& ctx, ::rocket::tinybuf& buf)
       int u8len = ROCKET_LZCNT32(static_cast<uint32_t>(ctx.c ^ -1) << 24);
       ctx.c &= (1 << (7 - u8len)) - 1;
       for(int k = 1;  k < u8len;  ++k) {
-        int next = buf.getc();
+        int next = usrc.getc();
         if(!is_within(next, 0x80, 0xBF))
           return do_err(ctx, "Invalid UTF-8 sequence");
         else {
@@ -193,7 +202,7 @@ do_load_next(Parser_Context& ctx, ::rocket::tinybuf& buf)
   }
 
 void
-do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
   {
     char mbs[MB_LEN_MAX];
     size_t mblen = 1;
@@ -213,22 +222,22 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
     if(ROCKET_UNEXPECT(mblen > 1))
       token.append(mbs + 1, mblen - 1);
 
-    do_load_next(ctx, buf);
+    do_load_next(ctx, usrc);
   }
 
 ROCKET_FLATTEN
 void
-do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& buf)
+do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
   {
     // Clear the current token and skip whitespace.
-    ctx.saved_offset = buf.tell();
+    ctx.saved_offset = usrc.tell();
     ctx.error = nullptr;
     token.clear();
 
     if(ctx.c == -1)
-      do_load_next(ctx, buf);
+      do_load_next(ctx, usrc);
     while(is_any(ctx.c, '\t', '\r', '\n', ' '))
-      do_load_next(ctx, buf);
+      do_load_next(ctx, usrc);
     if(ctx.c == -1)
       return;
 
@@ -254,29 +263,29 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         // Take a floating-point number. Strictly, JSON doesn't allow plus signs
         // or leading zeroes, but we accept them as extensions.
         do
-          do_mov(token, ctx, buf);
+          do_mov(token, ctx, usrc);
         while(is_within(ctx.c, '0', '9'));
 
         if(ctx.c == '.') {
-          do_mov(token, ctx, buf);
+          do_mov(token, ctx, usrc);
           if(!is_within(ctx.c, '0', '9'))
             return do_err(ctx, "Invalid number");
           else {
             do
-              do_mov(token, ctx, buf);
+              do_mov(token, ctx, usrc);
             while(is_within(ctx.c, '0', '9'));
           }
         }
 
         if(is_any(ctx.c, 'e', 'E')) {
-          do_mov(token, ctx, buf);
+          do_mov(token, ctx, usrc);
           if(is_any(ctx.c, '+', '-'))
-            do_mov(token, ctx, buf);
+            do_mov(token, ctx, usrc);
           if(!is_within(ctx.c, '0', '9'))
             return do_err(ctx, "Invalid number");
           else {
             do
-              do_mov(token, ctx, buf);
+              do_mov(token, ctx, usrc);
             while(is_within(ctx.c, '0', '9'));
           }
         }
@@ -294,7 +303,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         // Take an identifier. As in JavaScript, we accept dollar signs in
         // identifiers as an extension.
         do
-          do_mov(token, ctx, buf);
+          do_mov(token, ctx, usrc);
         while(is_any(ctx.c, '_', '$') || is_within(ctx.c, 'A', 'Z')
               || is_within(ctx.c, 'a', 'z') || is_within(ctx.c, '0', '9'));
 
@@ -308,17 +317,17 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
         // Take a double-quoted string. When stored in `token`, it shall start
         // with a double-quote character, followed by the decoded string. No
         // terminating double-quote character is appended.
-        do_mov(token, ctx, buf);
+        do_mov(token, ctx, usrc);
         while(ctx.c != '"')
           if(ctx.c == -1)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
           else if(ctx.c != '\\')
-            do_mov(token, ctx, buf);
+            do_mov(token, ctx, usrc);
           else {
             // Read an escape sequence.
-            int next = buf.getc();
+            int next = usrc.getc();
             if(next == -1)
               return do_err(ctx, "Incomplete escape sequence");
             else if(is_any(next, '\\', '\"', '/'))
@@ -336,7 +345,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
             else if(next == 'u') {
               // Read the first UTF-16 code unit.
               char temp[16] = "0x";
-              if(buf.getn(temp + 2, 4) != 4)
+              if(usrc.getn(temp + 2, 4) != 4)
                 return do_err(ctx, "Invalid escape sequence");
 
               ::rocket::ascii_numget numg;
@@ -351,7 +360,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
 
               if(is_within(ctx.c, 0xD800, 0xDBFF)) {
                 // Look for a trailing surrogate.
-                if(buf.getn(temp, 6) != 6)
+                if(usrc.getn(temp, 6) != 6)
                   return do_err(ctx, "Missing UTF-16 trailing surrogate");
 
                 if(::std::memcmp(temp, "\\u", 2) != 0)
@@ -374,7 +383,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
             }
 
             // Move the unescaped character into the token.
-            do_mov(token, ctx, buf);
+            do_mov(token, ctx, usrc);
           }
 
         // Drop the terminating quotation mark for simplicity; do not attempt to
@@ -391,7 +400,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
   }
 
 void
-do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
+do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Options opts)
   {
     // Initialize parser state.
     ctx.c = -1;
@@ -412,7 +421,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
     ::rocket::ascii_numget numg;
     variant_type* pstor = &root;
 
-    do_token(token, ctx, buf);
+    do_token(token, ctx, usrc);
     if(ctx.error)
       return;
 
@@ -422,7 +431,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
 
     if(token[0] == '[') {
       // array
-      do_token(token, ctx, buf);
+      do_token(token, ctx, usrc);
       if(token.empty())
         return do_err(ctx, "Array not terminated properly");
       else if(ctx.error)
@@ -442,7 +451,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
     }
     else if(token[0] == '{') {
       // object
-      do_token(token, ctx, buf);
+      do_token(token, ctx, usrc);
       if(token.empty())
         return do_err(ctx, "Object not terminated properly");
       else if(ctx.error)
@@ -457,11 +466,11 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
         rocket::phcow_string key;
         key.assign(token.data() + 1, token.size() - 1);
 
-        do_token(token, ctx, buf);
+        do_token(token, ctx, usrc);
         if(token != ":")
           return do_err(ctx, "Missing colon");
 
-        do_token(token, ctx, buf);
+        do_token(token, ctx, usrc);
         if(token.empty())
           return do_err(ctx, "Missing value");
         else if(ctx.error)
@@ -616,14 +625,14 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
       const auto& frm = stack.back();
       if(frm.psa) {
         // array
-        do_token(token, ctx, buf);
+        do_token(token, ctx, usrc);
         if(token.empty())
           return do_err(ctx, "Array not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
-          do_token(token, ctx, buf);
+          do_token(token, ctx, usrc);
           if(token.empty())
             return do_err(ctx, "Missing value");
           else if(ctx.error)
@@ -639,14 +648,14 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
       }
       else {
         // object
-        do_token(token, ctx, buf);
+        do_token(token, ctx, usrc);
         if(token.empty())
           return do_err(ctx, "Object not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
-          do_token(token, ctx, buf);
+          do_token(token, ctx, usrc);
           if(token.empty())
             return do_err(ctx, "Missing key string");
           else if(ctx.error)
@@ -661,11 +670,11 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
           if(!result.second)
             return do_err(ctx, "Duplicate key string");
 
-          do_token(token, ctx, buf);
+          do_token(token, ctx, usrc);
           if(token != ":")
             return do_err(ctx, "Missing colon");
 
-          do_token(token, ctx, buf);
+          do_token(token, ctx, usrc);
           if(ctx.error)
             return do_err(ctx, "Missing value");
 
@@ -685,7 +694,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, O
   }
 
 void
-do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
+do_escape_string_in_utf8(Unified_Sink usink, const ::rocket::cow_string& str)
   {
     char temp[16] = "\\";
     auto bptr = str.c_str();
@@ -696,19 +705,19 @@ do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str
       bptr ++;
 
       if(is_any(ch, '\\', '\"', '/'))
-        buf.putn(temp, 2);
+        usink.putn(temp, 2);
       else if(is_within(ch, 0x20, 0x7E))
-        buf.putc(temp[1]);
+        usink.putc(temp[1]);
       else if(ch == '\b')
-        buf.putn("\\b", 2);
+        usink.putn("\\b", 2);
       else if(ch == '\f')
-        buf.putn("\\f", 2);
+        usink.putn("\\f", 2);
       else if(ch == '\n')
-        buf.putn("\\n", 2);
+        usink.putn("\\n", 2);
       else if(ch == '\r')
-        buf.putn("\\r", 2);
+        usink.putn("\\r", 2);
       else if(ch == '\t')
-        buf.putn("\\t", 2);
+        usink.putn("\\t", 2);
       else {
         // Convert this character to UTF-16.
         char16_t c16;
@@ -716,12 +725,12 @@ do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str
         size_t mblen = ::std::mbrtoc16(&c16, bptr - 1, static_cast<size_t>(eptr - bptr) + 1, &mbst);
         if(mblen == 0) {
           // A null byte has been consumed and stored into `c16`.
-          buf.putn("\\u0000", 6);
+          usink.putn("\\u0000", 6);
         }
         else if(static_cast<int>(mblen) < 0) {
           // The input string is invalid. Consume one byte anyway, but print a
           // replacement character.
-          buf.putn("\\uFFFD", 6);
+          usink.putn("\\uFFFD", 6);
         }
         else {
           // `mblen` bytes have been consumed, converted and stored into `c16`.
@@ -741,7 +750,7 @@ do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str
           }
 
           // Write the escape sequence.
-          buf.putn(temp, ntemp);
+          usink.putn(temp, ntemp);
           bptr += mblen - 1;
         }
       }
@@ -749,7 +758,7 @@ do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str
   }
 
 void
-do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
+do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
   {
     // Break deep recursion with a handwritten stack.
     struct xFrame
@@ -768,7 +777,7 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
     switch(static_cast<Type>(pstor->index()))
       {
       case t_null:
-        buf.putn("null", 4);
+        usink.putn("null", 4);
         break;
 
       case t_array:
@@ -777,12 +786,12 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
           auto& frm = stack.emplace_back();
           frm.psa = &(pstor->as<V_array>());
           frm.ita = frm.psa->begin();
-          buf.putc('[');
+          usink.putc('[');
           pstor = &(frm.ita->mf_stor());
           goto do_unpack_loop_;
         }
 
-        buf.putn("[]", 2);
+        usink.putn("[]", 2);
         break;
 
       case t_object:
@@ -791,33 +800,33 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
           auto& frm = stack.emplace_back();
           frm.pso = &(pstor->as<V_object>());
           frm.ito = frm.pso->begin();
-          buf.putn("{\"", 2);
-          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
-          buf.putn("\":", 2);
+          usink.putn("{\"", 2);
+          do_escape_string_in_utf8(usink, frm.ito->first.rdstr());
+          usink.putn("\":", 2);
           pstor = &(frm.ito->second.mf_stor());
           goto do_unpack_loop_;
         }
 
-        buf.putn("{}", 2);
+        usink.putn("{}", 2);
         break;
 
       case t_boolean:
         nump.put_TB(pstor->as<V_boolean>());
-        buf.putn(nump.data(), nump.size());
+        usink.putn(nump.data(), nump.size());
         break;
 
       case t_integer:
         if(opts & option_json_mode) {
           // as floating-point number; inaccurate for large values
           nump.put_DD(static_cast<V_number>(pstor->as<V_integer>()));
-          buf.putn(nump.data(), nump.size());
+          usink.putn(nump.data(), nump.size());
         }
         else {
           // precise; annotated
           nump.put_DI(pstor->as<V_integer>());
-          buf.putn("\"$l:", 4);
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
+          usink.putn("\"$l:", 4);
+          usink.putn(nump.data(), nump.size());
+          usink.putc('\"');
         }
         break;
 
@@ -825,40 +834,40 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
         if(::std::isfinite(pstor->as<V_number>())) {
           // finite; unquoted
           nump.put_DD(pstor->as<V_number>());
-          buf.putn(nump.data(), nump.size());
+          usink.putn(nump.data(), nump.size());
         }
         else if(opts & option_json_mode) {
           // invalid; nullified
-          buf.putn("null", 4);
+          usink.putn("null", 4);
         }
         else {
           // non-finite; annotated
-          buf.putn("\"$d:", 4);
+          usink.putn("\"$d:", 4);
           nump.put_DD(pstor->as<V_number>());
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
+          usink.putn(nump.data(), nump.size());
+          usink.putc('\"');
         }
         break;
 
       case t_string:
         if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
           // general; quoted
-          buf.putc('\"');
-          do_escape_string_in_utf8(buf, pstor->as<V_string>());
-          buf.putc('\"');
+          usink.putc('\"');
+          do_escape_string_in_utf8(usink, pstor->as<V_string>());
+          usink.putc('\"');
         }
         else {
           // starts with `$`; annotated
-          buf.putn("\"$s:", 4);
-          do_escape_string_in_utf8(buf, pstor->as<V_string>());
-          buf.putc('\"');
+          usink.putn("\"$s:", 4);
+          do_escape_string_in_utf8(usink, pstor->as<V_string>());
+          usink.putc('\"');
         }
         break;
 
       case t_binary:
         if(opts & option_json_mode) {
           // invalid; nullified
-          buf.putn("null", 4);
+          usink.putn("null", 4);
         }
         else {
           // annotated
@@ -875,7 +884,7 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
 
           if(use_hex) {
             // hex
-            buf.putn("\"$h:", 4);
+            usink.putn("\"$h:", 4);
 
             const auto hex_digit = [](uint64_t b)
               {
@@ -899,7 +908,7 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
                 word <<= 4;
               }
 
-              buf.putn(hex_word, 16);
+              usink.putn(hex_word, 16);
             }
 
             if(bptr != eptr) {
@@ -919,12 +928,12 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
                 word <<= 4;
               }
 
-              buf.putn(hex_word, nrem * 2);
+              usink.putn(hex_word, nrem * 2);
             }
           }
           else {
             // base64
-            buf.putn("\"$b:", 4);
+            usink.putn("\"$b:", 4);
 
             const auto base64_digit = [](uint32_t b)
               {
@@ -954,7 +963,7 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
                 word <<= 6;
               }
 
-              buf.putn(b64_word, 4);
+              usink.putn(b64_word, 4);
             }
 
             if(bptr != eptr) {
@@ -972,25 +981,25 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
                 word <<= 6;
               }
 
-              buf.putn(b64_word, 4);
+              usink.putn(b64_word, 4);
             }
           }
-          buf.putc('\"');
+          usink.putc('\"');
         }
         break;
 
       case t_time:
         if(opts & option_json_mode) {
           // invalid; nullified
-          buf.putn("null", 4);
+          usink.putn("null", 4);
         }
         else {
           // annotated
           nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
                                 pstor->as<V_time>()).time_since_epoch().count());
-          buf.putn("\"$t:", 4);
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
+          usink.putn("\"$t:", 4);
+          usink.putn(nump.data(), nump.size());
+          usink.putc('\"');
         }
         break;
 
@@ -1006,27 +1015,27 @@ do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
         // array
         if(++ frm.ita != frm.psa->end()) {
           // next
-          buf.putc(',');
+          usink.putc(',');
           pstor = &(frm.ita->mf_stor());
           goto do_unpack_loop_;
         }
 
         // end
-        buf.putc(']');
+        usink.putc(']');
       }
       else {
         // object
         if(++ frm.ito != frm.pso->end()) {
           // next
-          buf.putn(",\"", 2);
-          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
-          buf.putn("\":", 2);
+          usink.putn(",\"", 2);
+          do_escape_string_in_utf8(usink, frm.ito->first.rdstr());
+          usink.putn("\":", 2);
           pstor = &(frm.ito->second.mf_stor());
           goto do_unpack_loop_;
         }
 
         // end
-        buf.putc('}');
+        usink.putc('}');
       }
 
       // close
@@ -1078,23 +1087,38 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, buf, opts);
+    do_parse_with(this->m_stor, ctx, Unified_Source(&buf), opts);
   }
 
 void
 Value::
 parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
   {
-    ::rocket::tinybuf_str buf(str, ::rocket::tinybuf::open_read);
-    this->parse_with(ctx, buf, opts);
+    Memory_Source msrc(str.data(), str.size());
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+  }
+
+void
+Value::
+parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts)
+  {
+    Memory_Source msrc(str, len);
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+  }
+
+void
+Value::
+parse_with(Parser_Context& ctx, const char* str, Options opts)
+  {
+    Memory_Source msrc(str, ::strlen(str));
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
   }
 
 void
 Value::
 parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
   {
-    ::rocket::tinybuf_file buf(fp);
-    this->parse_with(ctx, buf, opts);
+    do_parse_with(this->m_stor, ctx, Unified_Source(fp), opts);
   }
 
 bool
@@ -1102,7 +1126,7 @@ Value::
 parse(::rocket::tinybuf& buf, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, buf, opts);
+    do_parse_with(this->m_stor, ctx, Unified_Source(&buf), opts);
     return !ctx.error;
   }
 
@@ -1111,7 +1135,28 @@ Value::
 parse(const ::rocket::cow_string& str, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, str, opts);
+    Memory_Source msrc(str.data(), str.size());
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(const char* str, size_t len, Options opts)
+  {
+    Parser_Context ctx;
+    Memory_Source msrc(str, len);
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(const char* str, Options opts)
+  {
+    Parser_Context ctx;
+    Memory_Source msrc(str, ::strlen(str));
+    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
     return !ctx.error;
   }
 
@@ -1120,7 +1165,7 @@ Value::
 parse(::std::FILE* fp, Options opts)
   {
     Parser_Context ctx;
-    this->parse_with(ctx, fp, opts);
+    do_parse_with(this->m_stor, ctx, Unified_Source(fp), opts);
     return !ctx.error;
   }
 
@@ -1128,41 +1173,37 @@ void
 Value::
 print_to(::rocket::tinybuf& buf, Options opts) const
   {
-    do_print_to(buf, this->m_stor, opts);
+    do_print_to(Unified_Sink(&buf), this->m_stor, opts);
   }
 
 void
 Value::
 print_to(::rocket::cow_string& str, Options opts) const
   {
-    ::rocket::tinybuf_str buf(::std::move(str), ::rocket::tinybuf::open_write);
-    this->print_to(buf, opts);
-    str = buf.extract_string();
+    do_print_to(Unified_Sink(&str), this->m_stor, opts);
   }
 
 void
 Value::
 print_to(::std::FILE* fp, Options opts) const
   {
-    ::rocket::tinybuf_file buf(fp);
-    this->print_to(buf, opts);
+    do_print_to(Unified_Sink(fp), this->m_stor, opts);
   }
 
 ::rocket::cow_string
 Value::
 to_string(Options opts) const
   {
-    ::rocket::tinybuf_str buf(::rocket::tinybuf::open_write);
-    this->print_to(buf, opts);
-    return buf.extract_string();
+    ::rocket::cow_string str;
+    do_print_to(Unified_Sink(&str), this->m_stor, opts);
+    return str;
   }
 
 void
 Value::
 print_to_stderr(Options opts) const
   {
-    ::rocket::tinybuf_file buf(stderr);
-    this->print_to(buf, opts);
+    do_print_to(Unified_Sink(stderr), this->m_stor, opts);
   }
 
 }  // namespace taxon

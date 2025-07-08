@@ -629,6 +629,12 @@ class Value
     parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts = options_default);
 
     void
+    parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts = options_default);
+
+    void
+    parse_with(Parser_Context& ctx, const char* str, Options opts = options_default);
+
+    void
     parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts = options_default);
 
     bool
@@ -636,6 +642,12 @@ class Value
 
     bool
     parse(const ::rocket::cow_string& str, Options opts = options_default);
+
+    bool
+    parse(const char* str, size_t len, Options opts = options_default);
+
+    bool
+    parse(const char* str, Options opts = options_default);
 
     bool
     parse(::std::FILE* fp, Options opts = options_default);
