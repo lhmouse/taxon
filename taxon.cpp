@@ -95,7 +95,7 @@ struct Unified_Source
     Unified_Source(::std::FILE* f) : fp(f)  { }
 
     int
-    getc()
+    getc() const
       {
         if(this->mem)
           return this->mem->getc();
@@ -108,7 +108,7 @@ struct Unified_Source
       }
 
     size_t
-    getn(char* s, size_t n)
+    getn(char* s, size_t n) const
       {
         if(this->mem)
           return this->mem->getn(s, n);
@@ -121,7 +121,7 @@ struct Unified_Source
       }
 
     int64_t
-    tell()
+    tell() const
       {
         if(this->mem)
           return this->mem->tell();
@@ -145,7 +145,7 @@ struct Unified_Sink
     Unified_Sink(::std::FILE* f) : fp(f)  { }
 
     void
-    putc(char c)
+    putc(char c) const
       {
         if(this->str)
           this->str->push_back(c);
@@ -158,7 +158,7 @@ struct Unified_Sink
       }
 
     void
-    putn(const char* s, size_t n)
+    putn(const char* s, size_t n) const
       {
         if(this->str)
           this->str->append(s, n);
