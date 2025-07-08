@@ -470,7 +470,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         if(token[0] != '"')
           return do_err(ctx, "Missing key string");
 
-        auto emr = frm.pso->try_emplace(::rocket::cow_string(token.data() + 1, token.size() - 1));
+        auto emr = frm.pso->try_emplace(token.substr(1));
         ROCKET_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
@@ -664,7 +664,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           if(token[0] != '"')
             return do_err(ctx, "Missing key string");
 
-          auto emr = frm.pso->try_emplace(::rocket::cow_string(token.data() + 1, token.size() - 1));
+          auto emr = frm.pso->try_emplace(token.substr(1));
           if(!emr.second)
             return do_err(ctx, "Duplicate key string");
 
