@@ -323,7 +323,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
-          else if(ctx.c != '\\')
+          else if(ROCKET_EXPECT(ctx.c != '\\'))
             do_mov(token, ctx, usrc);
           else {
             // Read an escape sequence.
@@ -377,7 +377,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                   return do_err(ctx, "Missing UTF-16 trailing surrogate");
 
                 ctx.c &= 0x3FF;
-                ctx.c |= static_cast<int>(high << 10 & 0xFFC00);
+                ctx.c |= static_cast<int>(high & 0x3FF) << 10;
                 ctx.c += 0x10000;
               }
             }
