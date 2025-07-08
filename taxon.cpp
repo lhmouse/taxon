@@ -18,6 +18,8 @@ template class ::rocket::cow_hashmap<rocket::phcow_string,
 namespace taxon {
 namespace {
 
+using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
+
 constexpr ROCKET_ALWAYS_INLINE
 bool
 is_within(int c, int lo, int hi)
@@ -40,6 +42,124 @@ do_err(Parser_Context& ctx, const char* error)
     ctx.offset = ctx.saved_offset;
     ctx.error = error;
   }
+
+struct Memory_Source
+  {
+    const char* bptr;
+    const char* sptr;
+    const char* eptr;
+
+    constexpr Memory_Source() noexcept
+      : bptr(), sptr(), eptr()  { }
+
+    constexpr Memory_Source(const char* s, size_t n) noexcept
+      : bptr(s), sptr(s), eptr(s + n)  { }
+
+    int
+    getc() noexcept
+      {
+        int r = -1;
+        if(this->sptr != this->eptr) {
+          r = static_cast<unsigned char>(*(this->sptr));
+          this->sptr ++;
+        }
+        return r;
+      }
+
+    size_t
+    getn(char* s, size_t n) noexcept
+      {
+        size_t r = ::std::min(static_cast<size_t>(this->eptr - this->sptr), n);
+        if(r != 0) {
+          ::memcpy(s, this->sptr, r);
+          this->sptr += r;
+        }
+        return r;
+      }
+
+    int64_t
+    tell() const noexcept
+      {
+        return this->sptr - this->bptr;
+      }
+  };
+
+struct Unified_Source
+  {
+    Memory_Source mem = { };
+    ::rocket::tinybuf* buf = nullptr;
+    ::std::FILE* fp = nullptr;
+
+    Unified_Source(const char* s, size_t n) : mem(s, n)  { }
+    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
+    Unified_Source(::std::FILE* f) : fp(f)  { }
+
+    int
+    getc()
+      {
+        if(this->mem.bptr)
+          return this->mem.getc();
+        else if(this->buf)
+          return this->buf->getc();
+        else if(this->fp)
+          return ::fgetc(this->fp);
+      }
+
+    size_t
+    getn(char* s, size_t n)
+      {
+        if(this->mem.bptr)
+          return this->mem.getn(s, n);
+        else if(this->buf)
+          return this->buf->getn(s, n);
+        else if(this->fp)
+          return ::fread(s, 1, n, this->fp);
+      }
+
+    int64_t
+    tell()
+      {
+        if(this->mem.bptr)
+          return this->mem.tell();
+        else if(this->buf)
+          return this->buf->tell();
+        else if(this->fp)
+          return ::ftello(this->fp);
+      }
+  };
+
+struct Unified_Sink
+  {
+    ::rocket::cow_string* str = nullptr;
+    ::rocket::tinybuf* buf = nullptr;
+    ::std::FILE* fp = nullptr;
+
+    Unified_Sink(::rocket::cow_string* s) : str(s)  { }
+    Unified_Sink(::rocket::tinybuf* b) : buf(b)  { }
+    Unified_Sink(::std::FILE* f) : fp(f)  { }
+
+    void
+    putc(char c)
+      {
+        if(this->str)
+          this->str->push_back(c);
+        else if(this->buf)
+          this->buf->putc(c);
+        else if(this->fp)
+          ::fputc(c, this->fp);
+      }
+
+    void
+    putn(const char* s, size_t n)
+      {
+        if(this->str)
+          this->str->append(s, n);
+        else if(this->buf)
+          this->buf->putn(s, n);
+        else if(this->fp)
+          ::fwrite(s, 1, n, this->fp);
+      }
+  };
 
 void
 do_load_next(Parser_Context& ctx, ::rocket::tinybuf& buf)
