@@ -442,6 +442,8 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         auto& frm = stack.emplace_back();
         frm.target = pstor;
         frm.psa = &(pstor->emplace<V_array>());
+
+        // first
         pstor = &(frm.psa->emplace_back().mf_stor());
         goto do_pack_value_loop_;
       }
@@ -458,31 +460,29 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         return;
 
       if(token[0] != '}') {
+        // open
+        auto& frm = stack.emplace_back();
+        frm.target = pstor;
+        frm.pso = &(pstor->emplace<V_object>());
+
         // We are inside an object, so this token must be a key string, followed
         // by a colon, followed by its value.
         if(token[0] != '"')
           return do_err(ctx, "Missing key string");
 
-        rocket::phcow_string key;
-        key.assign(token.data() + 1, token.size() - 1);
+        auto emr = frm.pso->try_emplace(::rocket::cow_string(token.data() + 1, token.size() - 1));
+        ROCKET_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
         if(token != ":")
           return do_err(ctx, "Missing colon");
 
         do_token(token, ctx, usrc);
-        if(token.empty())
+        if(ctx.error)
           return do_err(ctx, "Missing value");
-        else if(ctx.error)
-          return;
 
-        // open
-        auto& frm = stack.emplace_back();
-        frm.target = pstor;
-        frm.pso = &(pstor->emplace<V_object>());
-        auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
-        ROCKET_ASSERT(emplace_result.second);
-        pstor = &(emplace_result.first->second.mf_stor());
+        // first
+        pstor = &(emr.first->second.mf_stor());
         goto do_pack_value_loop_;
       }
 
@@ -664,10 +664,8 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           if(token[0] != '"')
             return do_err(ctx, "Missing key string");
 
-          rocket::phcow_string key;
-          key.assign(token.data() + 1, token.size() - 1);
-          auto result = frm.pso->try_emplace(::std::move(key), nullptr);
-          if(!result.second)
+          auto emr = frm.pso->try_emplace(::rocket::cow_string(token.data() + 1, token.size() - 1));
+          if(!emr.second)
             return do_err(ctx, "Duplicate key string");
 
           do_token(token, ctx, usrc);
@@ -679,7 +677,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
             return do_err(ctx, "Missing value");
 
           // next
-          pstor = &(result.first->second.mf_stor());
+          pstor = &(emr.first->second.mf_stor());
           goto do_pack_value_loop_;
         }
 
