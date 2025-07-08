@@ -391,6 +391,300 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, ::rocket::tinybuf& bu
   }
 
 void
+do_parse_with(variant_type& root, Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
+  {
+    // Initialize parser state.
+    ctx.c = -1;
+    ctx.offset = 0;
+    ctx.saved_offset = 0;
+    ctx.error = nullptr;
+
+    // Break deep recursion with a handwritten stack.
+    struct xFrame
+      {
+        variant_type* target;
+        V_array* psa;
+        V_object* pso;
+      };
+
+    ::rocket::cow_vector<xFrame> stack;
+    ::rocket::cow_string token;
+    ::rocket::ascii_numget numg;
+    variant_type* pstor = &root;
+
+    do_token(token, ctx, buf);
+    if(ctx.error)
+      return;
+
+  do_pack_value_loop_:
+    if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
+      return do_err(ctx, "Nesting limit exceeded");
+
+    if(token[0] == '[') {
+      // array
+      do_token(token, ctx, buf);
+      if(token.empty())
+        return do_err(ctx, "Array not terminated properly");
+      else if(ctx.error)
+        return;
+
+      if(token[0] != ']') {
+        // open
+        auto& frm = stack.emplace_back();
+        frm.target = pstor;
+        frm.psa = &(pstor->emplace<V_array>());
+        pstor = &(frm.psa->emplace_back().mf_stor());
+        goto do_pack_value_loop_;
+      }
+
+      // empty
+      pstor->emplace<V_array>();
+    }
+    else if(token[0] == '{') {
+      // object
+      do_token(token, ctx, buf);
+      if(token.empty())
+        return do_err(ctx, "Object not terminated properly");
+      else if(ctx.error)
+        return;
+
+      if(token[0] != '}') {
+        // We are inside an object, so this token must be a key string, followed
+        // by a colon, followed by its value.
+        if(token[0] != '"')
+          return do_err(ctx, "Missing key string");
+
+        rocket::phcow_string key;
+        key.assign(token.data() + 1, token.size() - 1);
+
+        do_token(token, ctx, buf);
+        if(token != ":")
+          return do_err(ctx, "Missing colon");
+
+        do_token(token, ctx, buf);
+        if(token.empty())
+          return do_err(ctx, "Missing value");
+        else if(ctx.error)
+          return;
+
+        // open
+        auto& frm = stack.emplace_back();
+        frm.target = pstor;
+        frm.pso = &(pstor->emplace<V_object>());
+        auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
+        ROCKET_ASSERT(emplace_result.second);
+        pstor = &(emplace_result.first->second.mf_stor());
+        goto do_pack_value_loop_;
+      }
+
+      // empty
+      pstor->emplace<V_object>();
+    }
+    else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
+      // number
+      numg.parse_DD(token.data(), token.size());
+      numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
+      if(numg.overflowed())
+        return do_err(ctx, "Number value out of range");
+    }
+    else if(token[0] == '\"') {
+      // string
+      if((opts & option_json_mode) || (token[1] != '$')) {
+        // plain
+        pstor->emplace<V_string>(token.data() + 1, token.size() - 1);
+      }
+      else if(token.starts_with("\"$l:")) {
+        // 64-bit integer
+        if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
+          return do_err(ctx, "Invalid 64-bit integer");
+
+        numg.cast_I(pstor->emplace<V_integer>(), INT64_MIN, INT64_MAX);
+        if(numg.overflowed())
+          return do_err(ctx, "64-bit integer value out of range");
+      }
+      else if(token.starts_with("\"$d:")) {
+        // double-precision number
+        if(numg.parse_D(token.data() + 4, token.size() - 4) != token.size() - 4)
+          return do_err(ctx, "Invalid double-precision number");
+
+        // Values that are out of range are converted to infinities and are
+        // always accepted.
+        numg.cast_D(pstor->emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
+      }
+      else if(token.starts_with("\"$s:")) {
+        // annotated string
+        pstor->emplace<V_string>(token.data() + 4, token.size() - 4);
+      }
+      else if(token.starts_with("\"$t:")) {
+        // timestamp in milliseconds
+        if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
+          return do_err(ctx, "Invalid timestamp");
+
+        // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
+        // '9999-12-31T23:59:59.999Z'.
+        int64_t count;
+        numg.cast_I(count, -2208988800000, 253402300799999);
+        pstor->emplace<V_time>(::std::chrono::milliseconds(count));
+        if(numg.overflowed())
+          return do_err(ctx, "Timestamp value out of range");
+      }
+      else if(token.starts_with("\"$h:")) {
+        // hex-encoded data
+        size_t units = (token.size() - 4) / 2;
+        if(units * 2 != token.size() - 4)
+          return do_err(ctx, "Invalid hex string");
+
+        auto& bin = pstor->emplace<V_binary>();
+        bin.reserve(units);
+
+        auto bptr = token.data() + 4;
+        const auto eptr = token.data() + token.size();
+        while(bptr != eptr) {
+          uint32_t value = 0;
+          for(int k = 0;  k != 2;  ++k) {
+            value <<= 4;
+            int c = static_cast<uint8_t>(bptr[k]);
+            if(is_within(c, '0', '9'))
+              value |= static_cast<uint32_t>(c - '0');
+            else if(is_within(c, 'A', 'F'))
+              value |= static_cast<uint32_t>(c - 'A' + 10);
+            else if(is_within(c, 'a', 'f'))
+              value |= static_cast<uint32_t>(c - 'a' + 10);
+            else
+              return do_err(ctx, "Invalid hex digit");
+          }
+
+          bin.push_back(static_cast<uint8_t>(value));
+          bptr += 2;
+        }
+      }
+      else if(token.starts_with("\"$b:")) {
+        // base64-encoded data
+        size_t units = (token.size() - 4) / 4;
+        if(units * 4 != token.size() - 4)
+          return do_err(ctx, "Invalid base64 string");
+
+        auto& bin = pstor->emplace<V_binary>();
+        bin.reserve(units);
+
+        auto bptr = token.data() + 4;
+        const auto eptr = token.data() + token.size();
+        while(bptr != eptr) {
+          uint32_t value = 0;
+          uint32_t out_bytes = 3;
+          for(int k = 0;  k != 4;  ++k) {
+            value <<= 6;
+            int c = static_cast<uint8_t>(bptr[k]);
+            if(is_within(c, 'A', 'Z'))
+              value |= static_cast<uint32_t>(c - 'A');
+            else if(is_within(c, 'a', 'z'))
+              value |= static_cast<uint32_t>(c - 'a' + 26);
+            else if(is_within(c, '0', '9'))
+              value |= static_cast<uint32_t>(c - '0' + 52);
+            else if(c == '+')
+              value |= 62;
+            else if(c == '/')
+              value |= 63;
+            else if(c == '=') {
+              if(k >= 2)
+                out_bytes --;
+              else
+                return do_err(ctx, "Invalid base64 string");
+            }
+            else
+              return do_err(ctx, "Invalid base64 digit");
+          }
+
+          uint32_t temp = ROCKET_HTOBE32(value << 8);
+          bin.append(reinterpret_cast<uint8_t*>(&temp), out_bytes);
+          bptr += 4;
+        }
+      }
+      else
+       return do_err(ctx, "Unknown type annotator");
+    }
+    else if(token == "null")
+      pstor->emplace<V_null>();
+    else if(token == "true")
+      pstor->emplace<V_boolean>(true);
+    else if(token == "false")
+      pstor->emplace<V_boolean>(false);
+    else
+      return do_err(ctx, "Invalid token");
+
+    while(!stack.empty()) {
+      const auto& frm = stack.back();
+      if(frm.psa) {
+        // array
+        do_token(token, ctx, buf);
+        if(token.empty())
+          return do_err(ctx, "Array not terminated properly");
+        else if(ctx.error)
+          return;
+
+        if(token[0] == ',') {
+          do_token(token, ctx, buf);
+          if(token.empty())
+            return do_err(ctx, "Missing value");
+          else if(ctx.error)
+            return;
+
+          // next
+          pstor = &(frm.psa->emplace_back().mf_stor());
+          goto do_pack_value_loop_;
+        }
+
+        if(token[0] != ']')
+          return do_err(ctx, "Missing comma or closed bracket");
+      }
+      else {
+        // object
+        do_token(token, ctx, buf);
+        if(token.empty())
+          return do_err(ctx, "Object not terminated properly");
+        else if(ctx.error)
+          return;
+
+        if(token[0] == ',') {
+          do_token(token, ctx, buf);
+          if(token.empty())
+            return do_err(ctx, "Missing key string");
+          else if(ctx.error)
+            return;
+
+          if(token[0] != '"')
+            return do_err(ctx, "Missing key string");
+
+          rocket::phcow_string key;
+          key.assign(token.data() + 1, token.size() - 1);
+          auto result = frm.pso->try_emplace(::std::move(key), nullptr);
+          if(!result.second)
+            return do_err(ctx, "Duplicate key string");
+
+          do_token(token, ctx, buf);
+          if(token != ":")
+            return do_err(ctx, "Missing colon");
+
+          do_token(token, ctx, buf);
+          if(ctx.error)
+            return do_err(ctx, "Missing value");
+
+          // next
+          pstor = &(result.first->second.mf_stor());
+          goto do_pack_value_loop_;
+        }
+
+        if(token[0] != '}')
+          return do_err(ctx, "Missing comma or closed brace");
+      }
+
+      // close
+      pstor = frm.target;
+      stack.pop_back();
+    }
+  }
+
+void
 do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str)
   {
     char temp[16] = "\\";
@@ -784,295 +1078,7 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
-    // Initialize parser state.
-    ctx.c = -1;
-    ctx.offset = 0;
-    ctx.saved_offset = 0;
-    ctx.error = nullptr;
-
-    // Break deep recursion with a handwritten stack.
-    struct xFrame
-      {
-        variant_type* target;
-        V_array* psa;
-        V_object* pso;
-      };
-
-    ::rocket::cow_vector<xFrame> stack;
-    ::rocket::cow_string token;
-    ::rocket::ascii_numget numg;
-    variant_type* pstor = &(this->m_stor);
-
-    do_token(token, ctx, buf);
-    if(ctx.error)
-      return;
-
-  do_pack_value_loop_:
-    if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
-      return do_err(ctx, "Nesting limit exceeded");
-
-    if(token[0] == '[') {
-      // array
-      do_token(token, ctx, buf);
-      if(token.empty())
-        return do_err(ctx, "Array not terminated properly");
-      else if(ctx.error)
-        return;
-
-      if(token[0] != ']') {
-        // open
-        auto& frm = stack.emplace_back();
-        frm.target = pstor;
-        frm.psa = &(pstor->emplace<V_array>());
-        pstor = &(frm.psa->emplace_back().m_stor);
-        goto do_pack_value_loop_;
-      }
-
-      // empty
-      pstor->emplace<V_array>();
-    }
-    else if(token[0] == '{') {
-      // object
-      do_token(token, ctx, buf);
-      if(token.empty())
-        return do_err(ctx, "Object not terminated properly");
-      else if(ctx.error)
-        return;
-
-      if(token[0] != '}') {
-        // We are inside an object, so this token must be a key string, followed
-        // by a colon, followed by its value.
-        if(token[0] != '"')
-          return do_err(ctx, "Missing key string");
-
-        rocket::phcow_string key;
-        key.assign(token.data() + 1, token.size() - 1);
-
-        do_token(token, ctx, buf);
-        if(token != ":")
-          return do_err(ctx, "Missing colon");
-
-        do_token(token, ctx, buf);
-        if(token.empty())
-          return do_err(ctx, "Missing value");
-        else if(ctx.error)
-          return;
-
-        // open
-        auto& frm = stack.emplace_back();
-        frm.target = pstor;
-        frm.pso = &(pstor->emplace<V_object>());
-        auto emplace_result = frm.pso->try_emplace(::std::move(key), nullptr);
-        ROCKET_ASSERT(emplace_result.second);
-        pstor = &(emplace_result.first->second.m_stor);
-        goto do_pack_value_loop_;
-      }
-
-      // empty
-      pstor->emplace<V_object>();
-    }
-    else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
-      // number
-      numg.parse_DD(token.data(), token.size());
-      numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
-      if(numg.overflowed())
-        return do_err(ctx, "Number value out of range");
-    }
-    else if(token[0] == '\"') {
-      // string
-      if((opts & option_json_mode) || (token[1] != '$')) {
-        // plain
-        pstor->emplace<V_string>(token.data() + 1, token.size() - 1);
-      }
-      else if(token.starts_with("\"$l:")) {
-        // 64-bit integer
-        if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, "Invalid 64-bit integer");
-
-        numg.cast_I(pstor->emplace<V_integer>(), INT64_MIN, INT64_MAX);
-        if(numg.overflowed())
-          return do_err(ctx, "64-bit integer value out of range");
-      }
-      else if(token.starts_with("\"$d:")) {
-        // double-precision number
-        if(numg.parse_D(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, "Invalid double-precision number");
-
-        // Values that are out of range are converted to infinities and are
-        // always accepted.
-        numg.cast_D(pstor->emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
-      }
-      else if(token.starts_with("\"$s:")) {
-        // annotated string
-        pstor->emplace<V_string>(token.data() + 4, token.size() - 4);
-      }
-      else if(token.starts_with("\"$t:")) {
-        // timestamp in milliseconds
-        if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
-          return do_err(ctx, "Invalid timestamp");
-
-        // The allowed timestamp values are from '1900-01-01T00:00:00.000Z' to
-        // '9999-12-31T23:59:59.999Z'.
-        int64_t count;
-        numg.cast_I(count, -2208988800000, 253402300799999);
-        pstor->emplace<V_time>(::std::chrono::milliseconds(count));
-        if(numg.overflowed())
-          return do_err(ctx, "Timestamp value out of range");
-      }
-      else if(token.starts_with("\"$h:")) {
-        // hex-encoded data
-        size_t units = (token.size() - 4) / 2;
-        if(units * 2 != token.size() - 4)
-          return do_err(ctx, "Invalid hex string");
-
-        auto& bin = pstor->emplace<V_binary>();
-        bin.reserve(units);
-
-        auto bptr = token.data() + 4;
-        const auto eptr = token.data() + token.size();
-        while(bptr != eptr) {
-          uint32_t value = 0;
-          for(int k = 0;  k != 2;  ++k) {
-            value <<= 4;
-            int c = static_cast<uint8_t>(bptr[k]);
-            if(is_within(c, '0', '9'))
-              value |= static_cast<uint32_t>(c - '0');
-            else if(is_within(c, 'A', 'F'))
-              value |= static_cast<uint32_t>(c - 'A' + 10);
-            else if(is_within(c, 'a', 'f'))
-              value |= static_cast<uint32_t>(c - 'a' + 10);
-            else
-              return do_err(ctx, "Invalid hex digit");
-          }
-
-          bin.push_back(static_cast<uint8_t>(value));
-          bptr += 2;
-        }
-      }
-      else if(token.starts_with("\"$b:")) {
-        // base64-encoded data
-        size_t units = (token.size() - 4) / 4;
-        if(units * 4 != token.size() - 4)
-          return do_err(ctx, "Invalid base64 string");
-
-        auto& bin = pstor->emplace<V_binary>();
-        bin.reserve(units);
-
-        auto bptr = token.data() + 4;
-        const auto eptr = token.data() + token.size();
-        while(bptr != eptr) {
-          uint32_t value = 0;
-          uint32_t out_bytes = 3;
-          for(int k = 0;  k != 4;  ++k) {
-            value <<= 6;
-            int c = static_cast<uint8_t>(bptr[k]);
-            if(is_within(c, 'A', 'Z'))
-              value |= static_cast<uint32_t>(c - 'A');
-            else if(is_within(c, 'a', 'z'))
-              value |= static_cast<uint32_t>(c - 'a' + 26);
-            else if(is_within(c, '0', '9'))
-              value |= static_cast<uint32_t>(c - '0' + 52);
-            else if(c == '+')
-              value |= 62;
-            else if(c == '/')
-              value |= 63;
-            else if(c == '=') {
-              if(k >= 2)
-                out_bytes --;
-              else
-                return do_err(ctx, "Invalid base64 string");
-            }
-            else
-              return do_err(ctx, "Invalid base64 digit");
-          }
-
-          uint32_t temp = ROCKET_HTOBE32(value << 8);
-          bin.append(reinterpret_cast<uint8_t*>(&temp), out_bytes);
-          bptr += 4;
-        }
-      }
-      else
-       return do_err(ctx, "Unknown type annotator");
-    }
-    else if(token == "null")
-      pstor->emplace<V_null>();
-    else if(token == "true")
-      pstor->emplace<V_boolean>(true);
-    else if(token == "false")
-      pstor->emplace<V_boolean>(false);
-    else
-      return do_err(ctx, "Invalid token");
-
-    while(!stack.empty()) {
-      const auto& frm = stack.back();
-      if(frm.psa) {
-        // array
-        do_token(token, ctx, buf);
-        if(token.empty())
-          return do_err(ctx, "Array not terminated properly");
-        else if(ctx.error)
-          return;
-
-        if(token[0] == ',') {
-          do_token(token, ctx, buf);
-          if(token.empty())
-            return do_err(ctx, "Missing value");
-          else if(ctx.error)
-            return;
-
-          // next
-          pstor = &(frm.psa->emplace_back().m_stor);
-          goto do_pack_value_loop_;
-        }
-
-        if(token[0] != ']')
-          return do_err(ctx, "Missing comma or closed bracket");
-      }
-      else {
-        // object
-        do_token(token, ctx, buf);
-        if(token.empty())
-          return do_err(ctx, "Object not terminated properly");
-        else if(ctx.error)
-          return;
-
-        if(token[0] == ',') {
-          do_token(token, ctx, buf);
-          if(token.empty())
-            return do_err(ctx, "Missing key string");
-          else if(ctx.error)
-            return;
-
-          if(token[0] != '"')
-            return do_err(ctx, "Missing key string");
-
-          rocket::phcow_string key;
-          key.assign(token.data() + 1, token.size() - 1);
-          auto result = frm.pso->try_emplace(::std::move(key), nullptr);
-          if(!result.second)
-            return do_err(ctx, "Duplicate key string");
-
-          do_token(token, ctx, buf);
-          if(token != ":")
-            return do_err(ctx, "Missing colon");
-
-          do_token(token, ctx, buf);
-          if(ctx.error)
-            return do_err(ctx, "Missing value");
-
-          // next
-          pstor = &(result.first->second.m_stor);
-          goto do_pack_value_loop_;
-        }
-
-        if(token[0] != '}')
-          return do_err(ctx, "Missing comma or closed brace");
-      }
-
-      // close
-      pstor = frm.target;
-      stack.pop_back();
-    }
+    do_parse_with(this->m_stor, ctx, buf, opts);
   }
 
 void
