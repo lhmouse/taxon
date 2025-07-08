@@ -1085,7 +1085,7 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, Unified_Source(&buf), opts);
+    do_parse_with(this->m_stor, ctx, &buf, opts);
   }
 
 void
@@ -1093,7 +1093,7 @@ Value::
 parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
   {
     Memory_Source msrc(str.data(), str.size());
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
   }
 
 void
@@ -1101,7 +1101,7 @@ Value::
 parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts)
   {
     Memory_Source msrc(str, len);
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
   }
 
 void
@@ -1109,14 +1109,14 @@ Value::
 parse_with(Parser_Context& ctx, const char* str, Options opts)
   {
     Memory_Source msrc(str, ::strlen(str));
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
   }
 
 void
 Value::
 parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, Unified_Source(fp), opts);
+    do_parse_with(this->m_stor, ctx, fp, opts);
   }
 
 bool
@@ -1124,7 +1124,7 @@ Value::
 parse(::rocket::tinybuf& buf, Options opts)
   {
     Parser_Context ctx;
-    do_parse_with(this->m_stor, ctx, Unified_Source(&buf), opts);
+    do_parse_with(this->m_stor, ctx, &buf, opts);
     return !ctx.error;
   }
 
@@ -1134,7 +1134,7 @@ parse(const ::rocket::cow_string& str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str.data(), str.size());
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1144,7 +1144,7 @@ parse(const char* str, size_t len, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str, len);
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1154,7 +1154,7 @@ parse(const char* str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str, ::strlen(str));
-    do_parse_with(this->m_stor, ctx, Unified_Source(&msrc), opts);
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1163,7 +1163,7 @@ Value::
 parse(::std::FILE* fp, Options opts)
   {
     Parser_Context ctx;
-    do_parse_with(this->m_stor, ctx, Unified_Source(fp), opts);
+    do_parse_with(this->m_stor, ctx, fp, opts);
     return !ctx.error;
   }
 
@@ -1171,21 +1171,21 @@ void
 Value::
 print_to(::rocket::tinybuf& buf, Options opts) const
   {
-    do_print_to(Unified_Sink(&buf), this->m_stor, opts);
+    do_print_to(&buf, this->m_stor, opts);
   }
 
 void
 Value::
 print_to(::rocket::cow_string& str, Options opts) const
   {
-    do_print_to(Unified_Sink(&str), this->m_stor, opts);
+    do_print_to(&str, this->m_stor, opts);
   }
 
 void
 Value::
 print_to(::std::FILE* fp, Options opts) const
   {
-    do_print_to(Unified_Sink(fp), this->m_stor, opts);
+    do_print_to(fp, this->m_stor, opts);
   }
 
 ::rocket::cow_string
@@ -1193,7 +1193,7 @@ Value::
 to_string(Options opts) const
   {
     ::rocket::cow_string str;
-    do_print_to(Unified_Sink(&str), this->m_stor, opts);
+    do_print_to(&str, this->m_stor, opts);
     return str;
   }
 
@@ -1201,7 +1201,7 @@ void
 Value::
 print_to_stderr(Options opts) const
   {
-    do_print_to(Unified_Sink(stderr), this->m_stor, opts);
+    do_print_to(stderr, this->m_stor, opts);
   }
 
 }  // namespace taxon
