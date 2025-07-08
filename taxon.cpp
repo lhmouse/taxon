@@ -1,6 +1,7 @@
 // This file is part of TAXON.
 // Copyleft 2024-2025, LH_Mouse. All wrongs reserved.
 
+#define TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
 #include "taxon.hpp"
 #include <rocket/tinybuf_str.hpp>
 #include <rocket/tinybuf_file.hpp>
@@ -453,6 +454,292 @@ do_escape_string_in_utf8(::rocket::tinybuf& buf, const ::rocket::cow_string& str
     }
   }
 
+void
+do_print_to(::rocket::tinybuf& buf, const variant_type& root, Options opts)
+  {
+    // Break deep recursion with a handwritten stack.
+    struct xFrame
+      {
+        const V_array* psa;
+        V_array::const_iterator ita;
+        const V_object* pso;
+        V_object::const_iterator ito;
+      };
+
+    ::rocket::cow_vector<xFrame> stack;
+    ::rocket::ascii_numput nump;
+    const variant_type* pstor = &root;
+
+  do_unpack_loop_:
+    switch(static_cast<Type>(pstor->index()))
+      {
+      case t_null:
+        buf.putn("null", 4);
+        break;
+
+      case t_array:
+        if(!pstor->as<V_array>().empty()) {
+          // open
+          auto& frm = stack.emplace_back();
+          frm.psa = &(pstor->as<V_array>());
+          frm.ita = frm.psa->begin();
+          buf.putc('[');
+          pstor = &(frm.ita->mf_stor());
+          goto do_unpack_loop_;
+        }
+
+        buf.putn("[]", 2);
+        break;
+
+      case t_object:
+        if(!pstor->as<V_object>().empty()) {
+          // open
+          auto& frm = stack.emplace_back();
+          frm.pso = &(pstor->as<V_object>());
+          frm.ito = frm.pso->begin();
+          buf.putn("{\"", 2);
+          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
+          buf.putn("\":", 2);
+          pstor = &(frm.ito->second.mf_stor());
+          goto do_unpack_loop_;
+        }
+
+        buf.putn("{}", 2);
+        break;
+
+      case t_boolean:
+        nump.put_TB(pstor->as<V_boolean>());
+        buf.putn(nump.data(), nump.size());
+        break;
+
+      case t_integer:
+        if(opts & option_json_mode) {
+          // as floating-point number; inaccurate for large values
+          nump.put_DD(static_cast<V_number>(pstor->as<V_integer>()));
+          buf.putn(nump.data(), nump.size());
+        }
+        else {
+          // precise; annotated
+          nump.put_DI(pstor->as<V_integer>());
+          buf.putn("\"$l:", 4);
+          buf.putn(nump.data(), nump.size());
+          buf.putc('\"');
+        }
+        break;
+
+      case t_number:
+        if(::std::isfinite(pstor->as<V_number>())) {
+          // finite; unquoted
+          nump.put_DD(pstor->as<V_number>());
+          buf.putn(nump.data(), nump.size());
+        }
+        else if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
+        }
+        else {
+          // non-finite; annotated
+          buf.putn("\"$d:", 4);
+          nump.put_DD(pstor->as<V_number>());
+          buf.putn(nump.data(), nump.size());
+          buf.putc('\"');
+        }
+        break;
+
+      case t_string:
+        if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
+          // general; quoted
+          buf.putc('\"');
+          do_escape_string_in_utf8(buf, pstor->as<V_string>());
+          buf.putc('\"');
+        }
+        else {
+          // starts with `$`; annotated
+          buf.putn("\"$s:", 4);
+          do_escape_string_in_utf8(buf, pstor->as<V_string>());
+          buf.putc('\"');
+        }
+        break;
+
+      case t_binary:
+        if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
+        }
+        else {
+          // annotated
+          auto bptr = pstor->as<V_binary>().data();
+          const auto eptr = bptr + pstor->as<V_binary>().size();
+
+          bool use_hex = true;
+          if(opts & option_bin_as_base64)
+            use_hex = false;
+          else
+            use_hex = (pstor->as<V_binary>().size() <= 4)  // small
+                      || ((pstor->as<V_binary>().size() % 4 == 0)
+                          && (pstor->as<V_binary>().size() / 4 <= 8));
+
+          if(use_hex) {
+            // hex
+            buf.putn("\"$h:", 4);
+
+            const auto hex_digit = [](uint64_t b)
+              {
+                if(b < 10)
+                  return static_cast<char>('0' + b);
+                else
+                  return static_cast<char>('a' + b - 10);
+              };
+
+            while(eptr - bptr >= 8) {
+              // 8-byte group
+              char hex_word[16];
+              uint64_t word;
+
+              ::std::memcpy(&word, bptr, 8);
+              word = ROCKET_BETOH64(word);
+              bptr += 8;
+
+              for(uint32_t t = 0;  t != 16;  ++t) {
+                hex_word[t] = hex_digit(word >> 60);
+                word <<= 4;
+              }
+
+              buf.putn(hex_word, 16);
+            }
+
+            if(bptr != eptr) {
+              // <=7-byte group
+              size_t nrem = static_cast<size_t>(eptr - bptr);
+              char hex_word[16];
+              uint64_t word = 0;
+
+              for(uint32_t t = 0;  t != nrem;  ++t) {
+                word <<= 8;
+                word |= static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
+                bptr ++;
+              }
+
+              for(uint32_t t = 0;  t != nrem * 2;  ++t) {
+                hex_word[t] = hex_digit(word >> 60);
+                word <<= 4;
+              }
+
+              buf.putn(hex_word, nrem * 2);
+            }
+          }
+          else {
+            // base64
+            buf.putn("\"$b:", 4);
+
+            const auto base64_digit = [](uint32_t b)
+              {
+                if(b < 26)
+                  return static_cast<char>('A' + b);
+                else if(b < 52)
+                  return static_cast<char>('a' + b - 26);
+                else if(b < 62)
+                  return static_cast<char>('0' + b - 52);
+                else if(b < 63)
+                  return '+';
+                else
+                  return '/';
+              };
+
+            while(eptr - bptr >= 3) {
+              // 3-byte group
+              char b64_word[4];
+              uint32_t word;
+
+              ::std::memcpy(&word, bptr, 4);  // use the null terminator!
+              word = ROCKET_BETOH32(word);
+              bptr += 3;
+
+              for(uint32_t t = 0;  t != 4;  ++t) {
+                b64_word[t] = base64_digit(word >> 26);
+                word <<= 6;
+              }
+
+              buf.putn(b64_word, 4);
+            }
+
+            if(bptr != eptr) {
+              // 1-byte or 2-byte group
+              size_t nrem = static_cast<size_t>(eptr - bptr);
+              char b64_word[4] = { 0, 0, '=', '=' };
+              uint32_t word = 0;
+
+              ::std::memcpy(&word, bptr, 2);  // use the null terminator!
+              word = ROCKET_BETOH32(word);
+              bptr += nrem;
+
+              for(uint32_t t = 0;  t != nrem + 1;  ++t) {
+                b64_word[t] = base64_digit(word >> 26);
+                word <<= 6;
+              }
+
+              buf.putn(b64_word, 4);
+            }
+          }
+          buf.putc('\"');
+        }
+        break;
+
+      case t_time:
+        if(opts & option_json_mode) {
+          // invalid; nullified
+          buf.putn("null", 4);
+        }
+        else {
+          // annotated
+          nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
+                                pstor->as<V_time>()).time_since_epoch().count());
+          buf.putn("\"$t:", 4);
+          buf.putn(nump.data(), nump.size());
+          buf.putc('\"');
+        }
+        break;
+
+      default:
+        ::rocket::sprintf_and_throw<::std::invalid_argument>(
+              "taxon::Value: unknown type enumeration `%d`",
+              static_cast<int>(pstor->index()));
+      }
+
+    while(!stack.empty()) {
+      auto& frm = stack.mut_back();
+      if(frm.psa) {
+        // array
+        if(++ frm.ita != frm.psa->end()) {
+          // next
+          buf.putc(',');
+          pstor = &(frm.ita->mf_stor());
+          goto do_unpack_loop_;
+        }
+
+        // end
+        buf.putc(']');
+      }
+      else {
+        // object
+        if(++ frm.ito != frm.pso->end()) {
+          // next
+          buf.putn(",\"", 2);
+          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
+          buf.putn("\":", 2);
+          pstor = &(frm.ito->second.mf_stor());
+          goto do_unpack_loop_;
+        }
+
+        // end
+        buf.putc('}');
+      }
+
+      // close
+      stack.pop_back();
+    }
+  }
+
 }  // namespace
 
 // We assume that a all-bit-zero struct represents the `null` value.
@@ -835,287 +1122,7 @@ void
 Value::
 print_to(::rocket::tinybuf& buf, Options opts) const
   {
-    // Break deep recursion with a handwritten stack.
-    struct xFrame
-      {
-        const V_array* psa;
-        V_array::const_iterator ita;
-        const V_object* pso;
-        V_object::const_iterator ito;
-      };
-
-    ::rocket::cow_vector<xFrame> stack;
-    ::rocket::ascii_numput nump;
-    const variant_type* pstor = &(this->m_stor);
-
-  do_unpack_loop_:
-    switch(static_cast<Type>(pstor->index()))
-      {
-      case t_null:
-        buf.putn("null", 4);
-        break;
-
-      case t_array:
-        if(!pstor->as<V_array>().empty()) {
-          // open
-          auto& frm = stack.emplace_back();
-          frm.psa = &(pstor->as<V_array>());
-          frm.ita = frm.psa->begin();
-          buf.putc('[');
-          pstor = &(frm.ita->m_stor);
-          goto do_unpack_loop_;
-        }
-
-        buf.putn("[]", 2);
-        break;
-
-      case t_object:
-        if(!pstor->as<V_object>().empty()) {
-          // open
-          auto& frm = stack.emplace_back();
-          frm.pso = &(pstor->as<V_object>());
-          frm.ito = frm.pso->begin();
-          buf.putn("{\"", 2);
-          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
-          buf.putn("\":", 2);
-          pstor = &(frm.ito->second.m_stor);
-          goto do_unpack_loop_;
-        }
-
-        buf.putn("{}", 2);
-        break;
-
-      case t_boolean:
-        nump.put_TB(pstor->as<V_boolean>());
-        buf.putn(nump.data(), nump.size());
-        break;
-
-      case t_integer:
-        if(opts & option_json_mode) {
-          // as floating-point number; inaccurate for large values
-          nump.put_DD(static_cast<V_number>(pstor->as<V_integer>()));
-          buf.putn(nump.data(), nump.size());
-        }
-        else {
-          // precise; annotated
-          nump.put_DI(pstor->as<V_integer>());
-          buf.putn("\"$l:", 4);
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
-        }
-        break;
-
-      case t_number:
-        if(::std::isfinite(pstor->as<V_number>())) {
-          // finite; unquoted
-          nump.put_DD(pstor->as<V_number>());
-          buf.putn(nump.data(), nump.size());
-        }
-        else if(opts & option_json_mode) {
-          // invalid; nullified
-          buf.putn("null", 4);
-        }
-        else {
-          // non-finite; annotated
-          buf.putn("\"$d:", 4);
-          nump.put_DD(pstor->as<V_number>());
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
-        }
-        break;
-
-      case t_string:
-        if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
-          // general; quoted
-          buf.putc('\"');
-          do_escape_string_in_utf8(buf, pstor->as<V_string>());
-          buf.putc('\"');
-        }
-        else {
-          // starts with `$`; annotated
-          buf.putn("\"$s:", 4);
-          do_escape_string_in_utf8(buf, pstor->as<V_string>());
-          buf.putc('\"');
-        }
-        break;
-
-      case t_binary:
-        if(opts & option_json_mode) {
-          // invalid; nullified
-          buf.putn("null", 4);
-        }
-        else {
-          // annotated
-          auto bptr = pstor->as<V_binary>().data();
-          const auto eptr = bptr + pstor->as<V_binary>().size();
-
-          bool use_hex = true;
-          if(opts & option_bin_as_base64)
-            use_hex = false;
-          else
-            use_hex = (pstor->as<V_binary>().size() <= 4)  // small
-                      || ((pstor->as<V_binary>().size() % 4 == 0)
-                          && (pstor->as<V_binary>().size() / 4 <= 8));
-
-          if(use_hex) {
-            // hex
-            buf.putn("\"$h:", 4);
-
-            const auto hex_digit = [](uint64_t b)
-              {
-                if(b < 10)
-                  return static_cast<char>('0' + b);
-                else
-                  return static_cast<char>('a' + b - 10);
-              };
-
-            while(eptr - bptr >= 8) {
-              // 8-byte group
-              char hex_word[16];
-              uint64_t word;
-
-              ::std::memcpy(&word, bptr, 8);
-              word = ROCKET_BETOH64(word);
-              bptr += 8;
-
-              for(uint32_t t = 0;  t != 16;  ++t) {
-                hex_word[t] = hex_digit(word >> 60);
-                word <<= 4;
-              }
-
-              buf.putn(hex_word, 16);
-            }
-
-            if(bptr != eptr) {
-              // <=7-byte group
-              size_t nrem = static_cast<size_t>(eptr - bptr);
-              char hex_word[16];
-              uint64_t word = 0;
-
-              for(uint32_t t = 0;  t != nrem;  ++t) {
-                word <<= 8;
-                word |= static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
-                bptr ++;
-              }
-
-              for(uint32_t t = 0;  t != nrem * 2;  ++t) {
-                hex_word[t] = hex_digit(word >> 60);
-                word <<= 4;
-              }
-
-              buf.putn(hex_word, nrem * 2);
-            }
-          }
-          else {
-            // base64
-            buf.putn("\"$b:", 4);
-
-            const auto base64_digit = [](uint32_t b)
-              {
-                if(b < 26)
-                  return static_cast<char>('A' + b);
-                else if(b < 52)
-                  return static_cast<char>('a' + b - 26);
-                else if(b < 62)
-                  return static_cast<char>('0' + b - 52);
-                else if(b < 63)
-                  return '+';
-                else
-                  return '/';
-              };
-
-            while(eptr - bptr >= 3) {
-              // 3-byte group
-              char b64_word[4];
-              uint32_t word;
-
-              ::std::memcpy(&word, bptr, 4);  // use the null terminator!
-              word = ROCKET_BETOH32(word);
-              bptr += 3;
-
-              for(uint32_t t = 0;  t != 4;  ++t) {
-                b64_word[t] = base64_digit(word >> 26);
-                word <<= 6;
-              }
-
-              buf.putn(b64_word, 4);
-            }
-
-            if(bptr != eptr) {
-              // 1-byte or 2-byte group
-              size_t nrem = static_cast<size_t>(eptr - bptr);
-              char b64_word[4] = { 0, 0, '=', '=' };
-              uint32_t word = 0;
-
-              ::std::memcpy(&word, bptr, 2);  // use the null terminator!
-              word = ROCKET_BETOH32(word);
-              bptr += nrem;
-
-              for(uint32_t t = 0;  t != nrem + 1;  ++t) {
-                b64_word[t] = base64_digit(word >> 26);
-                word <<= 6;
-              }
-
-              buf.putn(b64_word, 4);
-            }
-          }
-          buf.putc('\"');
-        }
-        break;
-
-      case t_time:
-        if(opts & option_json_mode) {
-          // invalid; nullified
-          buf.putn("null", 4);
-        }
-        else {
-          // annotated
-          nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
-                                pstor->as<V_time>()).time_since_epoch().count());
-          buf.putn("\"$t:", 4);
-          buf.putn(nump.data(), nump.size());
-          buf.putc('\"');
-        }
-        break;
-
-      default:
-        ::rocket::sprintf_and_throw<::std::invalid_argument>(
-              "taxon::Value: unknown type enumeration `%d`",
-              static_cast<int>(pstor->index()));
-      }
-
-    while(!stack.empty()) {
-      auto& frm = stack.mut_back();
-      if(frm.psa) {
-        // array
-        if(++ frm.ita != frm.psa->end()) {
-          // next
-          buf.putc(',');
-          pstor = &(frm.ita->m_stor);
-          goto do_unpack_loop_;
-        }
-
-        // end
-        buf.putc(']');
-      }
-      else {
-        // object
-        if(++ frm.ito != frm.pso->end()) {
-          // next
-          buf.putn(",\"", 2);
-          do_escape_string_in_utf8(buf, frm.ito->first.rdstr());
-          buf.putn("\":", 2);
-          pstor = &(frm.ito->second.m_stor);
-          goto do_unpack_loop_;
-        }
-
-        // end
-        buf.putc('}');
-      }
-
-      // close
-      stack.pop_back();
-    }
+    do_print_to(buf, this->m_stor, opts);
   }
 
 void
