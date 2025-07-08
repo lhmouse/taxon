@@ -474,7 +474,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         ROCKET_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
-        if(token != ":")
+        if(token[0] != ':')
           return do_err(ctx, "Missing colon");
 
         do_token(token, ctx, usrc);
@@ -669,7 +669,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
             return do_err(ctx, "Duplicate key string");
 
           do_token(token, ctx, usrc);
-          if(token != ":")
+          if(token[0] != ':')
             return do_err(ctx, "Missing colon");
 
           do_token(token, ctx, usrc);
