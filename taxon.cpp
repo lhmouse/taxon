@@ -6,6 +6,7 @@
 #include <rocket/tinybuf.hpp>
 #include <rocket/ascii_numput.hpp>
 #include <rocket/ascii_numget.hpp>
+#include <vector>
 #include <cmath>
 #include <cstdio>
 #include <climits>
@@ -418,7 +419,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         V_object* pso;
       };
 
-    ::rocket::cow_vector<xFrame> stack;
+    ::std::vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
     variant_type* pstor = &root;
@@ -769,7 +770,7 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
         V_object::const_iterator ito;
       };
 
-    ::rocket::cow_vector<xFrame> stack;
+    ::std::vector<xFrame> stack;
     ::rocket::ascii_numput nump;
     const variant_type* pstor = &root;
 
@@ -1054,7 +1055,7 @@ Value::
   {
     // Break deep recursion with a handwritten stack.
     struct xVariant : variant_type  { };
-    ::rocket::cow_vector<xVariant> stack;
+    ::std::vector<xVariant> stack;
 
   do_unpack_loop_:
     try {
