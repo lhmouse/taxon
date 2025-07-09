@@ -234,12 +234,11 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
     ctx.error = nullptr;
     token.clear();
 
-    if(ctx.c < 0)
+    while(is_any(ctx.c, -1, ' ', '\t', '\r', '\n')) {
       do_load_next(ctx, usrc);
-    while(is_any(ctx.c, '\t', '\r', '\n', ' '))
-      do_load_next(ctx, usrc);
-    if(ctx.c < 0)
-      return;
+      if(ctx.c < 0)
+        return;
+    }
 
     switch(ctx.c)
       {
