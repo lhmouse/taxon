@@ -1011,7 +1011,7 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
       }
 
     while(!stack.empty()) {
-      auto& frm = stack.mut_back();
+      auto& frm = stack.back();
       if(frm.psa) {
         // array
         if(++ frm.ita != frm.psa->end()) {
@@ -1078,7 +1078,7 @@ Value::
     if(!stack.empty()) {
       // Destroy the this value. This will not result in recursion.
       ::rocket::destroy(&(this->m_stor));
-      ::rocket::construct(&(this->m_stor), static_cast<variant_type&&>(stack.mut_back()));
+      ::rocket::construct(&(this->m_stor), static_cast<variant_type&&>(stack.back()));
       stack.pop_back();
       goto do_unpack_loop_;
     }
