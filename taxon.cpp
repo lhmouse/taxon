@@ -201,8 +201,25 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
     }
   }
 
+struct Token
+  {
+    uint32_t n = 0;
+    char temp[1020];
+
+    bool empty() const { return n == 0; }
+    size_t size() const { return n; }
+    const char* data() const { return temp; }
+    void clear() { n = 0; }
+    char operator[](size_t t) const { return temp[t]; }
+    void push_back(char c) { temp[n] = c, n ++; }
+    void append(const char* s, size_t t) { memcpy(temp + n, s, t); n += t; }
+    ::rocket::cow_string substr(size_t t = 0) { return { temp + t, n - t }; }
+    bool starts_with(const char* s) const { return n >= strlen(s) && memcmp(temp, s, n) == 0; }
+    bool operator==(const char* s) const { return n == strlen(s) && memcmp(temp, s, n) == 0; }
+  };
+
 void
-do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
+do_mov(Token& token, Parser_Context& ctx, Unified_Source usrc)
   {
     char mbs[MB_LEN_MAX];
     size_t mblen = 1;
@@ -227,7 +244,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 
 ROCKET_FLATTEN
 void
-do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
+do_token(Token& token, Parser_Context& ctx, Unified_Source usrc)
   {
     // Clear the current token and skip whitespace.
     ctx.saved_offset = usrc.tell();
@@ -416,7 +433,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
       };
 
     ::rocket::cow_vector<xFrame> stack;
-    ::rocket::cow_string token;
+    Token token;
     ::rocket::ascii_numget numg;
     variant_type* pstor = &root;
 
