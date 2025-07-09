@@ -313,12 +313,12 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         ctx.error = nullptr;
         break;
 
-      case '"':
+      case '\"':
         // Take a double-quoted string. When stored in `token`, it shall start
         // with a double-quote character, followed by the decoded string. No
         // terminating double-quote character is appended.
         do_mov(token, ctx, usrc);
-        while(ctx.c != '"')
+        while(ctx.c != '\"')
           if(ctx.c < 0)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
@@ -467,7 +467,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
 
         // We are inside an object, so this token must be a key string, followed
         // by a colon, followed by its value.
-        if(token[0] != '"')
+        if(token[0] != '\"')
           return do_err(ctx, "Missing key string");
 
         auto emr = frm.pso->try_emplace(token.substr(1));
@@ -661,7 +661,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           else if(ctx.error)
             return;
 
-          if(token[0] != '"')
+          if(token[0] != '\"')
             return do_err(ctx, "Missing key string");
 
           auto emr = frm.pso->try_emplace(token.substr(1));
