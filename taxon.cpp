@@ -610,7 +610,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         }
       }
       else
-       return do_err(ctx, "Unknown type annotator");
+        return do_err(ctx, "Unknown type annotator");
     }
     else if(token == "null")
       pstor->emplace<V_null>();
