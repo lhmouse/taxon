@@ -36,6 +36,7 @@ is_any(int c, Ts... accept_set)
     return (... || (c == accept_set));
   }
 
+ROCKET_ALWAYS_INLINE
 void
 do_err(Parser_Context& ctx, const char* error)
   {
