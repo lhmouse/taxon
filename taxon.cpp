@@ -20,6 +20,7 @@ namespace taxon {
 namespace {
 
 using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
+using bytes_type = ::std::aligned_storage<sizeof(variant_type), sizeof(void*)>::type;
 
 constexpr ROCKET_ALWAYS_INLINE
 bool
@@ -1055,8 +1056,7 @@ Value::
 ~Value()
   {
     // Break deep recursion with a handwritten stack.
-    struct xVariant : variant_type  { };
-    ::std::vector<xVariant> stack;
+    ::std::vector<bytes_type> stack;
 
   do_unpack_loop_:
     switch(this->m_stor.index())
@@ -1066,7 +1066,7 @@ Value::
           auto psa = this->m_stor.mut_ptr<V_array>();
           if(psa->unique())
             for(auto it = psa->mut_begin();  it != psa->end();  ++it)
-              stack.emplace_back().swap(it->m_stor);
+              ::std::swap(stack.emplace_back(), reinterpret_cast<bytes_type&>(it->m_stor));
         }
         catch(::std::exception& stdex)
           { ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());  }
@@ -1077,7 +1077,7 @@ Value::
           auto pso = this->m_stor.mut_ptr<V_object>();
           if(pso->unique())
             for(auto it = pso->mut_begin();  it != pso->end();  ++it)
-              stack.emplace_back().swap(it->second.m_stor);
+              ::std::swap(stack.emplace_back(), reinterpret_cast<bytes_type&>(it->second.m_stor));
         }
         catch(::std::exception& stdex)
           { ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());  }
@@ -1087,7 +1087,7 @@ Value::
     if(!stack.empty()) {
       // Destroy the this value. This will not result in recursion.
       ::rocket::destroy(&(this->m_stor));
-      ::rocket::construct(&(this->m_stor), static_cast<variant_type&&>(stack.back()));
+      reinterpret_cast<bytes_type&>(this->m_stor) = stack.back();
       stack.pop_back();
       goto do_unpack_loop_;
     }
