@@ -1063,9 +1063,9 @@ Value::
       {
       case t_array:
         try {
-          auto psa = this->m_stor.mut_ptr<V_array>();
-          if(psa->unique())
-            for(auto it = psa->mut_begin();  it != psa->end();  ++it)
+          auto& sa = this->m_stor.mut<V_array>();
+          if(sa.unique())
+            for(auto it = sa.mut_begin();  it != sa.end();  ++it)
               ::std::swap(stack.emplace_back(), reinterpret_cast<bytes_type&>(it->m_stor));
         }
         catch(::std::exception& stdex)
@@ -1074,9 +1074,9 @@ Value::
 
       case t_object:
         try {
-          auto pso = this->m_stor.mut_ptr<V_object>();
-          if(pso->unique())
-            for(auto it = pso->mut_begin();  it != pso->end();  ++it)
+          auto& so = this->m_stor.mut<V_object>();
+          if(so.unique())
+            for(auto it = so.mut_begin();  it != so.end();  ++it)
               ::std::swap(stack.emplace_back(), reinterpret_cast<bytes_type&>(it->second.m_stor));
         }
         catch(::std::exception& stdex)
