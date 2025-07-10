@@ -1059,22 +1059,30 @@ Value::
     ::std::vector<xVariant> stack;
 
   do_unpack_loop_:
-    try {
-      // Unpack arrays or objects.
-      auto psa = this->m_stor.mut_ptr<V_array>();
-      if(psa && psa->unique())
-        for(auto it = psa->mut_begin();  it != psa->end();  ++it)
-          stack.emplace_back().swap(it->m_stor);
+    switch(this->m_stor.index())
+      {
+      case t_array:
+        try {
+          auto psa = this->m_stor.mut_ptr<V_array>();
+          if(psa->unique())
+            for(auto it = psa->mut_begin();  it != psa->end();  ++it)
+              stack.emplace_back().swap(it->m_stor);
+        }
+        catch(::std::exception& stdex)
+          { ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());  }
+        break;
 
-      auto pso = this->m_stor.mut_ptr<V_object>();
-      if(pso && pso->unique())
-        for(auto it = pso->mut_begin();  it != pso->end();  ++it)
-          stack.emplace_back().swap(it->second.m_stor);
-    }
-    catch(::std::exception& stdex) {
-      // Ignore this exception.
-      ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());
-    }
+      case t_object:
+        try {
+          auto pso = this->m_stor.mut_ptr<V_object>();
+          if(pso->unique())
+            for(auto it = pso->mut_begin();  it != pso->end();  ++it)
+              stack.emplace_back().swap(it->second.m_stor);
+        }
+        catch(::std::exception& stdex)
+          { ::std::fprintf(stderr, "WARNING: %s\n", stdex.what());  }
+        break;
+      }
 
     if(!stack.empty()) {
       // Destroy the this value. This will not result in recursion.
