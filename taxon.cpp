@@ -184,7 +184,7 @@ struct Unified_Sink
 
 struct String_Pool
   {
-    ::std::vector<::rocket::phcow_string> table;
+    ::std::vector<::rocket::phcow_string> st;
 
     struct hash_less
       {
@@ -205,15 +205,15 @@ struct String_Pool
     intern(const char* str, size_t len)
       {
         size_t hval = ::rocket::cow_string::hash()(str, len);
-        auto range = ::std::equal_range(this->table.begin(), this->table.end(), hval, hash_less());
+        auto range = ::std::equal_range(this->st.begin(), this->st.end(), hval, hash_less());
 
         // String already exists?
         for(auto it = range.first;  it != range.second;  ++it)
-          if((it->length() == len) && ::rocket::xmemeq(it->data(), str, len))
+          if(it->rdstr().equals(str, len))
             return *it;
 
         // No. Allocate a new one, while keeping the pool sorted.
-        auto it = this->table.insert(range.second, ::rocket::cow_string(str, len));
+        auto it = this->st.insert(range.second, ::rocket::cow_string(str, len));
         ROCKET_ASSERT(it->rdhash() == hval);
         return *it;
       }
