@@ -13,6 +13,10 @@
 #include <climits>
 #include <cfloat>
 #include <cuchar>
+#if defined __SSE2__
+#include <x86intrin.h>
+#include <xmmintrin.h>
+#endif
 template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 template class ::rocket::cow_vector<::taxon::Value>;
 template class ::rocket::cow_hashmap<rocket::phcow_string,
@@ -273,6 +277,46 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
     if(ROCKET_UNEXPECT(mblen > 1))
       token.append(mbs + 1, mblen - 1);
 
+    // If the token is an incomplete string, then try loading some characters
+    // that are known to require no escaping.
+    if(ROCKET_UNEXPECT(token[0] == '\"')) {
+      if(usrc.mem) {
+        const char* tptr = usrc.mem->sptr;
+#if defined __SSE2__
+        while(usrc.mem->eptr - tptr >= 16) {
+          __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
+          int mask = _mm_movemask_epi8(_mm_or_si128(
+                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')),
+                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\"'))),
+                       _mm_or_si128(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)),
+                                    _mm_cmplt_epi8(_mm_set1_epi8(0x7E), t))));
+          if(mask != 0) {
+            tptr += _bit_scan_forward(mask);
+            break;
+          }
+          tptr += 16;
+        }
+#else
+        while(usrc.mem->eptr != tptr) {
+          if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
+            break;
+          ++ tptr;
+        }
+#endif
+        token.append(usrc.mem->sptr, tptr);
+        usrc.mem->sptr = tptr;
+      }
+      else if(usrc.fp) {
+        char temp[256];
+        int len;
+        while(::fscanf(usrc.fp, "%256[]-~ !#-[]%n", temp, &len) == 1) {
+          token.append(temp, static_cast<unsigned>(len));
+          if(len < 256)
+            break;
+        }
+      }
+    }
+
     do_load_next(ctx, usrc);
   }
 
@@ -286,6 +330,35 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
     token.clear();
 
     while(is_any(ctx.c, -1, ' ', '\t', '\r', '\n')) {
+      if(usrc.mem) {
+        const char* tptr = usrc.mem->sptr;
+#if defined __SSE2__
+        while(usrc.mem->eptr - tptr >= 16) {
+          __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
+          int mask = 0xFFFF - _mm_movemask_epi8(_mm_or_si128(
+                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')),
+                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\t'))),
+                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')),
+                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\n')))));
+          if(mask != 0) {
+            tptr += _bit_scan_forward(mask);
+            break;
+          }
+          tptr += 16;
+        }
+#else
+        while(usrc.mem->eptr != tptr) {
+          if(!is_any(*tptr, ' ', '\t', '\r', '\n'))
+            break;
+          ++ tptr;
+        }
+#endif
+        usrc.mem->sptr = tptr;
+      }
+      else if(usrc.fp) {
+        ::fscanf(usrc.fp, "%*[ \t\r\n]");
+      }
+
       do_load_next(ctx, usrc);
       if(ctx.c < 0)
         return;
