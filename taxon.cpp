@@ -41,6 +41,9 @@ ROCKET_ALWAYS_INLINE
 void
 do_err(Parser_Context& ctx, const char* error)
   {
+    if(ctx.error)
+      return;
+
     ctx.c = -1;
     ctx.offset = ctx.saved_offset;
     ctx.error = error;
