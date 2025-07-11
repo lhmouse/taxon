@@ -80,6 +80,7 @@ lib_taxon = both_libraries('taxon',
 
 import('pkgconfig').generate(lib_taxon,
       name: 'taxon',
+      libraries: [ '-lasteria' ],
       url: 'https://github.com/lhmouse/taxon',
       description: 'The Type Annotation eXtension for JSON (TAXON) library '
                    + 'encodes 64-bit integers, binary data, timestamps, etc. '
