@@ -356,7 +356,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         usrc.mem->sptr = tptr;
       }
       else if(usrc.fp) {
-        ::fscanf(usrc.fp, "%*[ \t\r\n]");
+        (void)! ::fscanf(usrc.fp, "%*[ \t\r\n]");
       }
 
       do_load_next(ctx, usrc);
