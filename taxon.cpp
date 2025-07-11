@@ -285,13 +285,13 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          int mask = _mm_movemask_epi8(_mm_or_si128(
-                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')),
-                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\"'))),
-                       _mm_or_si128(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)),
-                                    _mm_cmplt_epi8(_mm_set1_epi8(0x7E), t))));
+          t = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')),
+                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\"'))),
+                           _mm_or_si128(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)),
+                                        _mm_cmplt_epi8(_mm_set1_epi8(0x7E), t)));
+          int mask = _mm_movemask_epi8(t);
           if(mask != 0) {
-            tptr += _bit_scan_forward(mask);
+            tptr += __builtin_ctz(static_cast<uint32_t>(mask));
             break;
           }
           tptr += 16;
@@ -335,13 +335,13 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          int mask = 0xFFFF - _mm_movemask_epi8(_mm_or_si128(
-                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')),
-                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\t'))),
-                       _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')),
-                                    _mm_cmpeq_epi8(t, _mm_set1_epi8('\n')))));
+          t = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')),
+                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\t'))),
+                           _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')),
+                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))));
+          int mask = 0xFFFF - _mm_movemask_epi8(t);
           if(mask != 0) {
-            tptr += _bit_scan_forward(mask);
+            tptr += __builtin_ctz(static_cast<uint32_t>(mask));
             break;
           }
           tptr += 16;
