@@ -17,6 +17,9 @@
 #include <x86intrin.h>
 #include <xmmintrin.h>
 #endif
+#if defined __ARM_NEON
+#include <arm_neon.h>
+#endif
 template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 template class ::rocket::cow_vector<::taxon::Value>;
 template class ::rocket::cow_hashmap<rocket::phcow_string,
@@ -296,6 +299,21 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
           }
           tptr += 16;
         }
+#elif defined __ARM_NEON
+        while(usrc.mem->eptr - tptr >= 16) {
+          uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
+          t = vorrq_u8(vorrq_u8(vceqq_u8(t, vdupq_n_u8('\\')),
+                                vceqq_u8(t, vdupq_n_u8('\"'))),
+                       vorrq_u8(vcltq_u8(t, vdupq_n_u8(0x20)),
+                                vcltq_u8(vdupq_n_u8(0x7E), t)));
+          uint8x8_t vmask = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
+          uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(vmask), 0);
+          if(mask != 0) {
+            tptr += __builtin_ctzll(mask) >> 2;
+            break;
+          }
+          tptr += 16;
+        }
 #else
         while(usrc.mem->eptr != tptr) {
           if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
@@ -342,6 +360,21 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
           int mask = 0xFFFF ^ _mm_movemask_epi8(t);
           if(mask != 0) {
             tptr += __builtin_ctz(static_cast<uint32_t>(mask));
+            break;
+          }
+          tptr += 16;
+        }
+#elif defined __ARM_NEON
+        while(usrc.mem->eptr - tptr >= 16) {
+          uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
+          t = vorrq_u8(vorrq_u8(vceqq_u8(t, vdupq_n_u8(' ')),
+                                vceqq_u8(t, vdupq_n_u8('\t'))),
+                       vorrq_u8(vceqq_u8(t, vdupq_n_u8('\r')),
+                                vceqq_u8(t, vdupq_n_u8('\n'))));
+          uint8x8_t vmask = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
+          uint64_t mask = UINT64_MAX ^ vget_lane_u64(vreinterpret_u64_u8(vmask), 0);
+          if(mask != 0) {
+            tptr += __builtin_ctzll(mask) >> 2;
             break;
           }
           tptr += 16;
