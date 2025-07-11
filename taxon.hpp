@@ -98,7 +98,8 @@ struct Parser_Context
 
     // !! internal fields !!
     int32_t c;
-    uint32_t reserved_1;
+    uint32_t eof : 1;
+    uint32_t reserved_1 : 31;
     int64_t saved_offset;
   };
 

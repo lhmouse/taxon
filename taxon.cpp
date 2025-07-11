@@ -181,9 +181,12 @@ void
 do_load_next(Parser_Context& ctx, Unified_Source usrc)
   {
     ctx.c = usrc.getc();
-    if(ctx.c < 0)
-      return do_err(ctx, "End of input stream");
-    else if(is_within(ctx.c, 0x80, 0xBF))
+    if(ctx.c < 0) {
+      ctx.eof = true;
+      return do_err(ctx, nullptr);
+    }
+
+    if(is_within(ctx.c, 0x80, 0xBF))
       return do_err(ctx, "Invalid UTF-8 byte");
     else if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
       // Parse a multibyte Unicode character.
@@ -191,12 +194,16 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
       ctx.c &= (1 << (7 - u8len)) - 1;
       for(int k = 1;  k < u8len;  ++k) {
         int next = usrc.getc();
+        if(next < 0) {
+          ctx.eof = true;
+          return do_err(ctx, "Incomplete UTF-8 sequence");
+        }
+
         if(!is_within(next, 0x80, 0xBF))
           return do_err(ctx, "Invalid UTF-8 sequence");
-        else {
-          ctx.c <<= 6;
-          ctx.c |= next & 0x3F;
-        }
+
+        ctx.c <<= 6;
+        ctx.c |= next & 0x3F;
       }
 
       if((ctx.c < 0x80)  // overlong
@@ -297,8 +304,9 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 
         // If the end of input has been reached, `ctx.error` may be set. We will
         // not return an error, so clear it.
-        ROCKET_ASSERT(!token.empty());
+        ROCKET_ASSERT(token.size() != 0);
         ctx.error = nullptr;
+        ctx.eof = false;
         break;
 
       case 'A' ... 'Z':
@@ -314,8 +322,9 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 
         // If the end of input has been reached, `ctx.error` may be set. We will
         // not return an error, so clear it.
-        ROCKET_ASSERT(!token.empty());
+        ROCKET_ASSERT(token.size() != 0);
         ctx.error = nullptr;
+        ctx.eof = false;
         break;
 
       case '\"':
@@ -324,7 +333,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         // terminating double-quote character is appended.
         do_mov(token, ctx, usrc);
         while(ctx.c != '\"')
-          if(ctx.c < 0)
+          if(ctx.eof)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
@@ -332,8 +341,10 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
             if(ROCKET_UNEXPECT(ctx.c == '\\')) {
               // Read an escape sequence.
               int next = usrc.getc();
-              if(next < 0)
+              if(next < 0) {
+                ctx.eof = true;
                 return do_err(ctx, "Incomplete escape sequence");
+              }
 
               if(is_any(next, '\\', '\"', '/'))
                 ctx.c = next;
@@ -397,9 +408,9 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         // Drop the terminating quotation mark for simplicity; do not attempt to
         // get the next character, as the stream may be blocking but we can't
         // really know whether there are more data.
-        ROCKET_ASSERT(!token.empty());
-        ctx.c = -1;
+        ROCKET_ASSERT(token.size() != 0);
         ctx.error = nullptr;
+        ctx.c = -1;
         break;
 
       default:
@@ -411,10 +422,8 @@ void
 do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Options opts)
   {
     // Initialize parser state.
+    ::std::memset(&ctx, 0, sizeof(ctx));
     ctx.c = -1;
-    ctx.offset = 0;
-    ctx.saved_offset = 0;
-    ctx.error = nullptr;
 
     // Break deep recursion with a handwritten stack.
     struct xFrame
@@ -440,7 +449,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
     if(token[0] == '[') {
       // array
       do_token(token, ctx, usrc);
-      if(token.empty())
+      if(ctx.eof)
         return do_err(ctx, "Array not terminated properly");
       else if(ctx.error)
         return;
@@ -462,7 +471,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
     else if(token[0] == '{') {
       // object
       do_token(token, ctx, usrc);
-      if(token.empty())
+      if(ctx.eof)
         return do_err(ctx, "Object not terminated properly");
       else if(ctx.error)
         return;
@@ -486,8 +495,10 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           return do_err(ctx, "Missing colon");
 
         do_token(token, ctx, usrc);
-        if(ctx.error)
+        if(ctx.eof)
           return do_err(ctx, "Missing value");
+        else if(ctx.error)
+          return;
 
         // first
         pstor = &(emr.first->second.mf_stor());
@@ -634,14 +645,14 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
       if(frm.psa) {
         // array
         do_token(token, ctx, usrc);
-        if(token.empty())
+        if(ctx.eof)
           return do_err(ctx, "Array not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
           do_token(token, ctx, usrc);
-          if(token.empty())
+          if(ctx.eof)
             return do_err(ctx, "Missing value");
           else if(ctx.error)
             return;
@@ -657,14 +668,14 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
       else {
         // object
         do_token(token, ctx, usrc);
-        if(token.empty())
+        if(ctx.eof)
           return do_err(ctx, "Object not terminated properly");
         else if(ctx.error)
           return;
 
         if(token[0] == ',') {
           do_token(token, ctx, usrc);
-          if(token.empty())
+          if(ctx.eof)
             return do_err(ctx, "Missing key string");
           else if(ctx.error)
             return;
@@ -681,8 +692,10 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
             return do_err(ctx, "Missing colon");
 
           do_token(token, ctx, usrc);
-          if(ctx.error)
+          if(ctx.eof)
             return do_err(ctx, "Missing value");
+          else if(ctx.error)
+            return;
 
           // next
           pstor = &(emr.first->second.mf_stor());
