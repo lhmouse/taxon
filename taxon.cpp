@@ -339,7 +339,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                                         _mm_cmpeq_epi8(t, _mm_set1_epi8('\t'))),
                            _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')),
                                         _mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))));
-          int mask = 0xFFFF - _mm_movemask_epi8(t);
+          int mask = 0xFFFF ^ _mm_movemask_epi8(t);
           if(mask != 0) {
             tptr += __builtin_ctz(static_cast<uint32_t>(mask));
             break;
