@@ -521,7 +521,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         // plain
         pstor->emplace<V_string>(token.data() + 1, token.size() - 1);
       }
-      else if(token.starts_with("\"$l:")) {
+      else if((token[2] == 'l') && (token[3] == ':')) {
         // 64-bit integer
         if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
           return do_err(ctx, "Invalid 64-bit integer");
@@ -530,7 +530,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         if(numg.overflowed())
           return do_err(ctx, "64-bit integer value out of range");
       }
-      else if(token.starts_with("\"$d:")) {
+      else if((token[2] == 'd') && (token[3] == ':')) {
         // double-precision number
         if(numg.parse_D(token.data() + 4, token.size() - 4) != token.size() - 4)
           return do_err(ctx, "Invalid double-precision number");
@@ -539,11 +539,11 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         // always accepted.
         numg.cast_D(pstor->emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
       }
-      else if(token.starts_with("\"$s:")) {
+      else if((token[2] == 's') && (token[3] == ':')) {
         // annotated string
         pstor->emplace<V_string>(token.data() + 4, token.size() - 4);
       }
-      else if(token.starts_with("\"$t:")) {
+      else if((token[2] == 't') && (token[3] == ':')) {
         // timestamp in milliseconds
         if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
           return do_err(ctx, "Invalid timestamp");
@@ -556,7 +556,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         if(numg.overflowed())
           return do_err(ctx, "Timestamp value out of range");
       }
-      else if(token.starts_with("\"$h:")) {
+      else if((token[2] == 'h') && (token[3] == ':')) {
         // hex-encoded data
         size_t units = (token.size() - 4) / 2;
         if(units * 2 != token.size() - 4)
@@ -586,7 +586,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           bptr += 2;
         }
       }
-      else if(token.starts_with("\"$b:")) {
+      else if((token[2] == 'b') && (token[3] == ':')) {
         // base64-encoded data
         size_t units = (token.size() - 4) / 4;
         if(units * 4 != token.size() - 4)
