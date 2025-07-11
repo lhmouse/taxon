@@ -6,6 +6,7 @@
 #include <rocket/tinybuf.hpp>
 #include <rocket/ascii_numput.hpp>
 #include <rocket/ascii_numget.hpp>
+#include <algorithm>
 #include <vector>
 #include <cmath>
 #include <cstdio>
@@ -174,6 +175,43 @@ struct Unified_Sink
           ::fwrite(s, 1, n, this->fp);
         else
           ROCKET_UNREACHABLE();
+      }
+  };
+
+struct String_Pool
+  {
+    ::std::vector<::rocket::phcow_string> table;
+
+    struct hash_less
+      {
+        bool
+        operator()(const ::rocket::phcow_string& x, const ::rocket::phcow_string& y) const noexcept
+          { return x.rdhash() < y.rdhash();  }
+
+        bool
+        operator()(const ::rocket::phcow_string& x, size_t y) const noexcept
+          { return x.rdhash() < y;  }
+
+        bool
+        operator()(size_t x, const ::rocket::phcow_string& y) const noexcept
+          { return x < y.rdhash();  }
+      };
+
+    const ::rocket::phcow_string&
+    intern(const char* str, size_t len)
+      {
+        size_t hval = ::rocket::cow_string::hash()(str, len);
+        auto range = ::std::equal_range(this->table.begin(), this->table.end(), hval, hash_less());
+
+        // String already exists?
+        for(auto it = range.first;  it != range.second;  ++it)
+          if((it->length() == len) && ::rocket::xmemeq(it->data(), str, len))
+            return *it;
+
+        // No. Allocate a new one, while keeping the pool sorted.
+        auto it = this->table.insert(range.second, ::rocket::cow_string(str, len));
+        ROCKET_ASSERT(it->rdhash() == hval);
+        return *it;
       }
   };
 
@@ -436,6 +474,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
     ::std::vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
+    String_Pool key_pool;
     variant_type* pstor = &root;
 
     do_token(token, ctx, usrc);
@@ -487,7 +526,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
         if(token[0] != '\"')
           return do_err(ctx, "Missing key string");
 
-        auto emr = frm.pso->try_emplace(token.substr(1));
+        auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
         ROCKET_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
@@ -683,7 +722,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
           if(token[0] != '\"')
             return do_err(ctx, "Missing key string");
 
-          auto emr = frm.pso->try_emplace(token.substr(1));
+          auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
           if(!emr.second)
             return do_err(ctx, "Duplicate key string");
 
