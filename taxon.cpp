@@ -1213,8 +1213,9 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
 // This is effectively undefined behavior. Don't play with this at home!
 alignas(Value) const char null_storage[sizeof(Value)] = { };
 
+void
 Value::
-~Value()
+do_nonrecursive_destructor() noexcept
   {
 #ifdef ROCKET_DEBUG
     // Attempt to run out of stack in a rather stupid way.
@@ -1258,9 +1259,10 @@ Value::
         break;
       }
 
+    ::rocket::destroy(&(this->m_stor));
+    reinterpret_cast<bytes_type&>(this->m_stor) = bytes_type();
+
     if(!stack.empty()) {
-      // Destroy the this value. This will not result in recursion.
-      ::rocket::destroy(&(this->m_stor));
       reinterpret_cast<bytes_type&>(this->m_stor) = stack.back();
       stack.pop_back();
       goto do_unpack_loop_;

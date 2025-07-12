@@ -110,6 +110,7 @@ class Value
   private:
     using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
     variant_type m_stor;
+    void do_nonrecursive_destructor() noexcept;
 
   public:
 #ifdef TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
@@ -122,7 +123,13 @@ class Value
 
     // Destroys this value. The destructor shall take care of a deep recursion, to
     // avoid running out of the system stack.
-    ~Value();
+    ~Value()
+      {
+        if((this->m_stor.index() == t_array) || (this->m_stor.index() == t_object)) {
+          this->do_nonrecursive_destructor();
+          ROCKET_ASSERT(this->m_stor.index() == 0);
+        }
+      }
 
     // Gets the type of the stored value.
     constexpr
