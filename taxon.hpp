@@ -43,8 +43,8 @@ using V_binary  = ::rocket::cow_bstring;
 using V_time    = ::std::chrono::system_clock::time_point;
 // - aggregate
 using V_array   = ::rocket::cow_vector<Value>;
-using V_object  = ::rocket::cow_hashmap<rocket::phcow_string,
-                       Value, rocket::phcow_string::hash>;
+using V_object  = ::rocket::cow_hashmap<::rocket::phcow_string,
+                      Value, ::rocket::phcow_string::hash>;
 
 // Expand a sequence of alternatives without a trailing comma. This macro is part
 // of the ABI.
@@ -716,6 +716,6 @@ static_assert(::std::is_nothrow_move_assignable<Value>::value, "");
 }  // namespace taxon
 extern template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 extern template class ::rocket::cow_vector<::taxon::Value>;
-extern template class ::rocket::cow_hashmap<rocket::phcow_string,
-  ::taxon::Value, rocket::phcow_string::hash>;
+extern template class ::rocket::cow_hashmap<::rocket::phcow_string,
+    ::taxon::Value, ::rocket::phcow_string::hash>;
 #endif

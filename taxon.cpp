@@ -22,8 +22,8 @@
 #endif
 template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
 template class ::rocket::cow_vector<::taxon::Value>;
-template class ::rocket::cow_hashmap<rocket::phcow_string,
-  ::taxon::Value, rocket::phcow_string::hash>;
+template class ::rocket::cow_hashmap<::rocket::phcow_string,
+    ::taxon::Value, ::rocket::phcow_string::hash>;
 namespace taxon {
 namespace {
 
