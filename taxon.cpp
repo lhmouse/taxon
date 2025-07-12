@@ -1216,6 +1216,19 @@ alignas(Value) const char null_storage[sizeof(Value)] = { };
 Value::
 ~Value()
   {
+#ifdef ROCKET_DEBUG
+    // Attempt to run out of stack in a rather stupid way.
+    static char* volatile s_stupid_begin;
+    static char* volatile s_stupid_end;
+
+    char stupid[1000] = { };
+    s_stupid_begin = stupid;
+    s_stupid_end = stupid + sizeof(s_stupid_end);
+
+    s_stupid_begin[0] = 1;
+    s_stupid_end[-1] = 2;
+#endif
+
     // Break deep recursion with a handwritten stack.
     ::std::vector<bytes_type> stack;
 
