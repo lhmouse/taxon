@@ -269,6 +269,7 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
     }
   }
 
+ROCKET_FLATTEN
 void
 do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
   {
@@ -328,7 +329,8 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
           ++ tptr;
         }
 #endif
-        token.append(usrc.mem->sptr, tptr);
+        if(tptr != usrc.mem->sptr)
+          token.append(usrc.mem->sptr, tptr);
         usrc.mem->sptr = tptr;
       }
       else if(usrc.fp) {
