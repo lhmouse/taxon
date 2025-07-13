@@ -481,69 +481,102 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
+          else if(ROCKET_EXPECT(ctx.c != '\\'))
+            do_mov(token, ctx, usrc);
           else {
-            if(ROCKET_UNEXPECT(ctx.c == '\\')) {
-              // Read an escape sequence.
-              int next = usrc.getc();
-              if(next < 0) {
-                ctx.eof = true;
-                return do_err(ctx, "Incomplete escape sequence");
-              }
-
-              if(is_any(next, '\\', '\"', '/'))
-                ctx.c = next;
-              else if(next == 'b')
-                ctx.c = '\b';
-              else if(next == 'f')
-                ctx.c = '\f';
-              else if(next == 'n')
-                ctx.c = '\n';
-              else if(next == 'r')
-                ctx.c = '\r';
-              else if(next == 't')
-                ctx.c = '\t';
-              else if(next == 'u') {
-                // Read the first UTF-16 code unit.
-                char temp[16] = "0x";
-                if(usrc.getn(temp + 2, 4) != 4)
-                  return do_err(ctx, "Invalid escape sequence");
-
-                ::rocket::ascii_numget numg;
-                if(numg.parse_XU(temp, 6) != 6)
-                  return do_err(ctx, "Invalid hexadecimal digit");
-
-                uint64_t high;
-                numg.cast_U(high, 0, UINT64_MAX);
-                ctx.c = static_cast<int>(high);
-                if(is_within(ctx.c, 0xDC00, 0xDFFF))
-                  return do_err(ctx, "Dangling UTF-16 trailing surrogate");
-
-                if(is_within(ctx.c, 0xD800, 0xDBFF)) {
-                  // Look for a trailing surrogate.
-                  if(usrc.getn(temp, 6) != 6)
-                    return do_err(ctx, "Missing UTF-16 trailing surrogate");
-
-                  if(::std::memcmp(temp, "\\u", 2) != 0)
-                    return do_err(ctx, "Missing UTF-16 trailing surrogate");
-
-                  ::std::memcpy(temp, "0x", 2);
-                  if(numg.parse_XU(temp, 6) != 6)
-                    return do_err(ctx, "Invalid hexadecimal digit");
-
-                  uint64_t low;
-                  numg.cast_U(low, 0, UINT64_MAX);
-                  ctx.c = static_cast<int>(low);
-                  if(!is_within(ctx.c, 0xDC00, 0xDFFF))
-                    return do_err(ctx, "Missing UTF-16 trailing surrogate");
-
-                  ctx.c &= 0x3FF;
-                  ctx.c |= static_cast<int>(high & 0x3FF) << 10;
-                  ctx.c += 0x10000;
-                }
-              }
-              else
-                return do_err(ctx, "Invalid escape sequence");
+            // Read an escape sequence.
+            int next = usrc.getc();
+            if(next < 0) {
+              ctx.eof = true;
+              return do_err(ctx, "Incomplete escape sequence");
             }
+
+            switch(next)
+              {
+              case '\\':
+              case '\"':
+              case '/':
+                ctx.c = next;
+                break;
+
+              case 'b':
+                ctx.c = '\b';
+                break;
+
+              case 'f':
+                ctx.c = '\f';
+                break;
+
+              case 'n':
+                ctx.c = '\n';
+                break;
+
+              case 'r':
+                ctx.c = '\r';
+                break;
+
+              case 't':
+                ctx.c = '\t';
+                break;
+
+              case 'u':
+                {
+                  // Read the first UTF-16 code unit.
+                  char temp[16];
+                  if(usrc.getn(temp, 4) != 4)
+                    return do_err(ctx, "Invalid escape sequence");
+
+                  ctx.c = 0;
+                  for(uint32_t k = 0;  k != 4;  ++k) {
+                    ctx.c <<= 4;
+                    int c = static_cast<uint8_t>(temp[k]);
+                    if(is_within(c, '0', '9'))
+                      ctx.c |= c - '0';
+                    else if(is_within(c, 'A', 'F'))
+                      ctx.c |= c - 'A' + 10;
+                    else if(is_within(c, 'a', 'f'))
+                      ctx.c |= c - 'a' + 10;
+                    else
+                      return do_err(ctx, "Invalid hexadecimal digit");
+                  }
+
+                  if(is_within(ctx.c, 0xDC00, 0xDFFF))
+                    return do_err(ctx, "Dangling UTF-16 trailing surrogate");
+                  else if(is_within(ctx.c, 0xD800, 0xDBFF)) {
+                    // The character was a UTF-16 leading surrogate. Now look for
+                    // a trailing one, which must be another `\uXXXX` sequence.
+                    if(usrc.getn(temp, 6) != 6)
+                      return do_err(ctx, "Missing UTF-16 trailing surrogate");
+
+                    if((temp[0] != '\\') || (temp[1] != 'u'))
+                      return do_err(ctx, "Missing UTF-16 trailing surrogate");
+
+                    int ls_value = ctx.c - 0xD800;
+                    ctx.c = 0;
+                    for(uint32_t k = 2;  k != 6;  ++k) {
+                      ctx.c <<= 4;
+                      int c = static_cast<uint8_t>(temp[k]);
+                      if(is_within(c, '0', '9'))
+                        ctx.c |= c - '0';
+                      else if(is_within(c, 'A', 'F'))
+                        ctx.c |= c - 'A' + 10;
+                      else if(is_within(c, 'a', 'f'))
+                        ctx.c |= c - 'a' + 10;
+                      else
+                        return do_err(ctx, "Invalid hexadecimal digit");
+                    }
+
+                    if(!is_within(ctx.c, 0xDC00, 0xDFFF))
+                      return do_err(ctx, "Missing UTF-16 trailing surrogate");
+
+                    ctx.c = 0x10000 + (ls_value << 10) + (ctx.c - 0xDC00);
+                  }
+                }
+                break;
+
+              default:
+                return do_err(ctx, "Invalid escape sequence");
+              }
 
             // Move the unescaped character into the token.
             do_mov(token, ctx, usrc);
@@ -724,7 +757,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
             else if(is_within(c, 'a', 'f'))
               value |= static_cast<uint32_t>(c - 'a' + 10);
             else
-              return do_err(ctx, "Invalid hex digit");
+              return do_err(ctx, "Invalid hexadecimal digit");
           }
 
           bin.push_back(static_cast<uint8_t>(value));
