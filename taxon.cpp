@@ -259,6 +259,16 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
     }
   }
 
+#if defined __ARM_NEON
+ROCKET_ALWAYS_INLINE
+uint64_t
+do_nibble_mask_u8(uint8x16_t t) noexcept
+  {
+    uint8x8_t nt = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
+    return vget_lane_u64(vreinterpret_u64_u8(nt), 0);
+  }
+#endif
+
 void
 do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
   {
@@ -288,11 +298,10 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          t = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')),
-                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\"'))),
-                           _mm_or_si128(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)),
-                                        _mm_cmplt_epi8(_mm_set1_epi8(0x7E), t)));
-          int mask = _mm_movemask_epi8(t);
+          int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')))
+                     | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\"')))
+                     | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
+                     | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
           if(mask != 0) {
             tptr += __builtin_ctz(static_cast<uint32_t>(mask));
             break;
@@ -302,12 +311,10 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #elif defined __ARM_NEON
         while(usrc.mem->eptr - tptr >= 16) {
           uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
-          t = vorrq_u8(vorrq_u8(vceqq_u8(t, vdupq_n_u8('\\')),
-                                vceqq_u8(t, vdupq_n_u8('\"'))),
-                       vorrq_u8(vcltq_u8(t, vdupq_n_u8(0x20)),
-                                vcltq_u8(vdupq_n_u8(0x7E), t)));
-          uint8x8_t vmask = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
-          uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(vmask), 0);
+          uint64_t mask = do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\\')))
+                          | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\"')))
+                          | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
+                          | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
           if(mask != 0) {
             tptr += __builtin_ctzll(mask) >> 2;
             break;
@@ -353,11 +360,11 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          t = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')),
-                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\t'))),
-                           _mm_or_si128(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')),
-                                        _mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))));
-          int mask = 0xFFFF ^ _mm_movemask_epi8(t);
+          int mask = (_mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')))
+                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\t')))
+                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')))
+                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))))
+                     ^ 0xFFFF;
           if(mask != 0) {
             tptr += __builtin_ctz(static_cast<uint32_t>(mask));
             break;
@@ -367,12 +374,11 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 #elif defined __ARM_NEON
         while(usrc.mem->eptr - tptr >= 16) {
           uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
-          t = vorrq_u8(vorrq_u8(vceqq_u8(t, vdupq_n_u8(' ')),
-                                vceqq_u8(t, vdupq_n_u8('\t'))),
-                       vorrq_u8(vceqq_u8(t, vdupq_n_u8('\r')),
-                                vceqq_u8(t, vdupq_n_u8('\n'))));
-          uint8x8_t vmask = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
-          uint64_t mask = UINT64_MAX ^ vget_lane_u64(vreinterpret_u64_u8(vmask), 0);
+          uint64_t mask = (do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8(' ')))
+                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\t'))),
+                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\r'))),
+                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\n'))))
+                          ^ UINT64_MAX;
           if(mask != 0) {
             tptr += __builtin_ctzll(mask) >> 2;
             break;
