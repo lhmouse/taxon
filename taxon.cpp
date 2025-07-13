@@ -898,67 +898,138 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
     }
   }
 
+ROCKET_FLATTEN
 void
-do_escape_string_in_utf8(Unified_Sink usink, const ::rocket::cow_string& str)
+do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
   {
-    char temp[16] = "\\";
-    auto bptr = str.c_str();
-    const auto eptr = str.c_str() + str.length();
+    auto bptr = str.data();
+    const auto eptr = str.data() + str.size();
     while(bptr != eptr) {
-      temp[1] = *bptr;
-      int ch = static_cast<uint8_t>(*bptr);
-      bptr ++;
-
-      if(is_any(ch, '\\', '\"', '/'))
-        usink.putn(temp, 2);
-      else if(is_within(ch, 0x20, 0x7E))
-        usink.putc(temp[1]);
-      else if(ch == '\b')
-        usink.putn("\\b", 2);
-      else if(ch == '\f')
-        usink.putn("\\f", 2);
-      else if(ch == '\n')
-        usink.putn("\\n", 2);
-      else if(ch == '\r')
-        usink.putn("\\r", 2);
-      else if(ch == '\t')
-        usink.putn("\\t", 2);
-      else {
-        // Convert this character to UTF-16.
-        char16_t c16;
-        ::std::mbstate_t mbst = { };
-        size_t mblen = ::std::mbrtoc16(&c16, bptr - 1, static_cast<size_t>(eptr - bptr) + 1, &mbst);
-        if(mblen == 0) {
-          // A null byte has been consumed and stored into `c16`.
-          usink.putn("\\u0000", 6);
+      auto tptr = bptr;
+#if defined __SSE2__
+      while(eptr - tptr >= 16) {
+        __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
+        int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')))
+                   | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\"')))
+                   | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('/')))
+                   | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
+                   | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
+        if(mask != 0) {
+          tptr += __builtin_ctz(static_cast<uint32_t>(mask));
+          break;
         }
-        else if(static_cast<int>(mblen) < 0) {
-          // The input string is invalid. Consume one byte anyway, but print a
-          // replacement character.
-          usink.putn("\\uFFFD", 6);
-        }
-        else {
-          // `mblen` bytes have been consumed, converted and stored into `c16`.
-          ::rocket::ascii_numput nump;
-          nump.put_XU(c16, 4);
-          temp[1] = 'u';
-          ::std::memcpy(temp + 2, nump.data() + 2, 4);
-          size_t ntemp = 6;
-
-          if(static_cast<int>(::std::mbrtoc16(&c16, nullptr, 0, &mbst)) == -3) {
-            // No input has been consumed, but a trailing surrogate has been
-            // stored into `c16`.
-            nump.put_XU(c16, 4);
-            ::std::memcpy(temp + 6, "\\u", 2);
-            ::std::memcpy(temp + 8, nump.data() + 2, 4);
-            ntemp += 6;
-          }
-
-          // Write the escape sequence.
-          usink.putn(temp, ntemp);
-          bptr += mblen - 1;
-        }
+        tptr += 16;
       }
+#elif defined __ARM_NEON
+      while(eptr - tptr >= 16) {
+        uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
+        uint64_t mask = do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\\')))
+                        | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\"')))
+                        | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('/')))
+                        | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
+                        | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
+        if(mask != 0) {
+          tptr += __builtin_ctzll(mask) >> 2;
+          break;
+        }
+        tptr += 16;
+      }
+#else
+      while(eptr != tptr) {
+        if(is_any(*tptr, '\\', '\"', '/') || !is_within(*tptr, 0x20, 0x7E))
+          break;
+        ++ tptr;
+      }
+#endif
+      if(tptr != bptr) {
+        usink.putn(bptr, static_cast<size_t>(tptr - bptr));
+        if(tptr == eptr)
+          break;
+      }
+      bptr = tptr + 1;
+
+      int next = static_cast<uint8_t>(*tptr);
+      if(is_within(next, 0x20, 0x7E))
+        usink.putc(static_cast<char>(next));
+      else
+        switch(next)
+          {
+          case '\\':
+          case '\"':
+          case '/':
+            {
+              char temp[2] = { '\\', static_cast<char>(next) };
+              usink.putn(temp, 2);
+            }
+            break;
+
+          case '\b':
+            usink.putn("\\b", 2);
+            break;
+
+          case '\f':
+            usink.putn("\\f", 2);
+            break;
+
+          case '\n':
+            usink.putn("\\n", 2);
+            break;
+
+          case '\r':
+            usink.putn("\\r", 2);
+            break;
+
+          case '\t':
+            usink.putn("\\t", 2);
+            break;
+
+          default:
+            {
+              // Read a multibyte character.
+              char16_t c16;
+              ::std::mbstate_t mbst = { };
+              size_t mblen = ::std::mbrtoc16(&c16, tptr, static_cast<size_t>(eptr - tptr), &mbst);
+              if(static_cast<int>(mblen) < 0) {
+                // The input string is invalid. Consume one byte anyway, but print
+                // a replacement character.
+                usink.putn("\\uFFFD", 6);
+              }
+              else if(mblen == 0) {
+                // A null byte has been consumed and stored into `c16`.
+                usink.putn("\\u0000", 6);
+              }
+              else {
+                // `mblen` bytes have been consumed, converted and stored into `c16`.
+                char temp[16] = "\\u1234\\u5678zzz";
+                uint32_t tlen = 6;
+                for(uint32_t k = 2;  k != 6;  ++k) {
+                  int c = c16 >> 12;
+                  c16 = static_cast<uint16_t>(c16 << 4);
+                  if(c < 10)
+                    temp[k] = static_cast<char>(c + '0');
+                  else
+                    temp[k] = static_cast<char>(c - 10 + 'A');
+                }
+
+                if(::std::mbrtoc16(&c16, nullptr, 0, &mbst) == static_cast<size_t>(-3)) {
+                  // No input has been consumed, but a trailing surrogate has been
+                  // stored into `c16`.
+                  tlen = 12;
+                  for(uint32_t k = 8;  k != 12;  ++k) {
+                    int c = c16 >> 12;
+                    c16 = static_cast<uint16_t>(c16 << 4);
+                    if(c < 10)
+                      temp[k] = static_cast<char>(c + '0');
+                    else
+                      temp[k] = static_cast<char>(c - 10 + 'A');
+                  }
+                }
+
+                usink.putn(temp, tlen);
+                bptr = tptr + mblen;
+              }
+            }
+          }
     }
   }
 
@@ -1006,7 +1077,7 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
           frm.pso = &(pstor->as<V_object>());
           frm.ito = frm.pso->begin();
           usink.putn("{\"", 2);
-          do_escape_string_in_utf8(usink, frm.ito->first.rdstr());
+          do_escape_string_utf16(usink, frm.ito->first.rdstr());
           usink.putn("\":", 2);
           pstor = &(frm.ito->second.mf_stor());
           goto do_unpack_loop_;
@@ -1058,13 +1129,13 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
         if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
           // general; quoted
           usink.putc('\"');
-          do_escape_string_in_utf8(usink, pstor->as<V_string>());
+          do_escape_string_utf16(usink, pstor->as<V_string>());
           usink.putc('\"');
         }
         else {
           // starts with `$`; annotated
           usink.putn("\"$s:", 4);
-          do_escape_string_in_utf8(usink, pstor->as<V_string>());
+          do_escape_string_utf16(usink, pstor->as<V_string>());
           usink.putc('\"');
         }
         break;
@@ -1233,7 +1304,7 @@ do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
         if(++ frm.ito != frm.pso->end()) {
           // next
           usink.putn(",\"", 2);
-          do_escape_string_in_utf8(usink, frm.ito->first.rdstr());
+          do_escape_string_utf16(usink, frm.ito->first.rdstr());
           usink.putn("\":", 2);
           pstor = &(frm.ito->second.mf_stor());
           goto do_unpack_loop_;
