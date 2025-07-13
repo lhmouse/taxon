@@ -904,7 +904,8 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
   {
     auto bptr = str.data();
     const auto eptr = str.data() + str.size();
-    while(bptr != eptr) {
+    for(;;) {
+      // Get a sequence of characters that require no escaping.
       auto tptr = bptr;
 #if defined __SSE2__
       while(eptr - tptr >= 16) {
@@ -941,68 +942,80 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
         ++ tptr;
       }
 #endif
-      if(tptr != bptr) {
+      if(tptr != bptr)
         usink.putn(bptr, static_cast<size_t>(tptr - bptr));
-        if(tptr == eptr)
-          break;
-      }
-      bptr = tptr + 1;
+      bptr = tptr;
 
-      int next = static_cast<uint8_t>(*tptr);
-      if(is_within(next, 0x20, 0x7E))
-        usink.putc(static_cast<char>(next));
-      else
-        switch(next)
+      if(bptr == eptr)
+        break;
+
+      int next = static_cast<uint8_t>(*(bptr ++));
+      switch(next)
+        {
+        case '\\':
+        case '\"':
+        case '/':
           {
-          case '\\':
-          case '\"':
-          case '/':
-            {
-              char temp[2] = { '\\', static_cast<char>(next) };
-              usink.putn(temp, 2);
+            char temp[2] = { '\\', *tptr };
+            usink.putn(temp, 2);
+          }
+          break;
+
+        case '\b':
+          usink.putn("\\b", 2);
+          break;
+
+        case '\f':
+          usink.putn("\\f", 2);
+          break;
+
+        case '\n':
+          usink.putn("\\n", 2);
+          break;
+
+        case '\r':
+          usink.putn("\\r", 2);
+          break;
+
+        case '\t':
+          usink.putn("\\t", 2);
+          break;
+
+        default:
+          if(is_within(next, 0x20, 0x7E))
+            usink.putc(*tptr);
+          else {
+            // Read a multibyte character.
+            char16_t c16;
+            ::std::mbstate_t mbst = { };
+            size_t mblen = ::std::mbrtoc16(&c16, tptr, static_cast<size_t>(eptr - tptr), &mbst);
+            if(static_cast<int>(mblen) < 0) {
+              // The input string is invalid. Consume one byte anyway, but print
+              // a replacement character.
+              usink.putn("\\uFFFD", 6);
             }
-            break;
-
-          case '\b':
-            usink.putn("\\b", 2);
-            break;
-
-          case '\f':
-            usink.putn("\\f", 2);
-            break;
-
-          case '\n':
-            usink.putn("\\n", 2);
-            break;
-
-          case '\r':
-            usink.putn("\\r", 2);
-            break;
-
-          case '\t':
-            usink.putn("\\t", 2);
-            break;
-
-          default:
-            {
-              // Read a multibyte character.
-              char16_t c16;
-              ::std::mbstate_t mbst = { };
-              size_t mblen = ::std::mbrtoc16(&c16, tptr, static_cast<size_t>(eptr - tptr), &mbst);
-              if(static_cast<int>(mblen) < 0) {
-                // The input string is invalid. Consume one byte anyway, but print
-                // a replacement character.
-                usink.putn("\\uFFFD", 6);
+            else if(mblen == 0) {
+              // A null byte has been consumed and stored into `c16`.
+              usink.putn("\\u0000", 6);
+            }
+            else {
+              // `mblen` bytes have been consumed, converted and stored into `c16`.
+              char temp[16] = "\\u1234\\u5678zzz";
+              uint32_t tlen = 6;
+              for(uint32_t k = 2;  k != 6;  ++k) {
+                int c = c16 >> 12;
+                c16 = static_cast<uint16_t>(c16 << 4);
+                if(c < 10)
+                  temp[k] = static_cast<char>(c + '0');
+                else
+                  temp[k] = static_cast<char>(c - 10 + 'A');
               }
-              else if(mblen == 0) {
-                // A null byte has been consumed and stored into `c16`.
-                usink.putn("\\u0000", 6);
-              }
-              else {
-                // `mblen` bytes have been consumed, converted and stored into `c16`.
-                char temp[16] = "\\u1234\\u5678zzz";
-                uint32_t tlen = 6;
-                for(uint32_t k = 2;  k != 6;  ++k) {
+
+              if(static_cast<int>(::std::mbrtoc16(&c16, nullptr, 0, &mbst)) == -3) {
+                // No input has been consumed, but a trailing surrogate has been
+                // stored into `c16`.
+                tlen = 12;
+                for(uint32_t k = 8;  k != 12;  ++k) {
                   int c = c16 >> 12;
                   c16 = static_cast<uint16_t>(c16 << 4);
                   if(c < 10)
@@ -1010,26 +1023,13 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
                   else
                     temp[k] = static_cast<char>(c - 10 + 'A');
                 }
-
-                if(::std::mbrtoc16(&c16, nullptr, 0, &mbst) == static_cast<size_t>(-3)) {
-                  // No input has been consumed, but a trailing surrogate has been
-                  // stored into `c16`.
-                  tlen = 12;
-                  for(uint32_t k = 8;  k != 12;  ++k) {
-                    int c = c16 >> 12;
-                    c16 = static_cast<uint16_t>(c16 << 4);
-                    if(c < 10)
-                      temp[k] = static_cast<char>(c + '0');
-                    else
-                      temp[k] = static_cast<char>(c - 10 + 'A');
-                  }
-                }
-
-                usink.putn(temp, tlen);
-                bptr = tptr + mblen;
               }
+
+              usink.putn(temp, tlen);
+              bptr = tptr + mblen;
             }
           }
+        }
     }
   }
 
