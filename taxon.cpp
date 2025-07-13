@@ -375,8 +375,8 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
         while(usrc.mem->eptr - tptr >= 16) {
           uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
           uint64_t mask = (do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8(' ')))
-                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\t'))),
-                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\r'))),
+                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\t')))
+                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\r')))
                            | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\n'))))
                           ^ UINT64_MAX;
           if(mask != 0) {
