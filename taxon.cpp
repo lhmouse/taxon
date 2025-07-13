@@ -45,6 +45,16 @@ is_any(int c, Ts... accept_set)
     return (... || (c == accept_set));
   }
 
+#if defined __ARM_NEON
+ROCKET_ALWAYS_INLINE
+uint64_t
+do_nibble_mask_u8(uint8x16_t t) noexcept
+  {
+    uint8x8_t nt = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
+    return vget_lane_u64(vreinterpret_u64_u8(nt), 0);
+  }
+#endif  // __ARM_NEON
+
 ROCKET_ALWAYS_INLINE
 void
 do_err(Parser_Context& ctx, const char* error)
@@ -258,16 +268,6 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
         return do_err(ctx, "Invalid UTF character");
     }
   }
-
-#if defined __ARM_NEON
-ROCKET_ALWAYS_INLINE
-uint64_t
-do_nibble_mask_u8(uint8x16_t t) noexcept
-  {
-    uint8x8_t nt = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
-    return vget_lane_u64(vreinterpret_u64_u8(nt), 0);
-  }
-#endif
 
 void
 do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
