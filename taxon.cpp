@@ -284,7 +284,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
     // that are known to require no escaping.
     if(ROCKET_UNEXPECT(token[0] == '\"')) {
       if(usrc.mem) {
-        const char* tptr = usrc.mem->sptr;
+        auto tptr = usrc.mem->sptr;
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
@@ -349,7 +349,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 
     while(is_any(ctx.c, -1, ' ', '\t', '\r', '\n')) {
       if(usrc.mem) {
-        const char* tptr = usrc.mem->sptr;
+        auto tptr = usrc.mem->sptr;
 #if defined __SSE2__
         while(usrc.mem->eptr - tptr >= 16) {
           __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
