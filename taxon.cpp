@@ -48,7 +48,8 @@ is_any(int c, Ts... accept_set)
 #if defined __ARM_NEON
 ROCKET_ALWAYS_INLINE
 uint64_t
-do_nibble_mask_u8(uint8x16_t t) noexcept
+do_nibble_mask_u8(uint8x16_t t)
+  noexcept
   {
     uint8x8_t nt = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
     return vget_lane_u64(vreinterpret_u64_u8(nt), 0);
@@ -73,14 +74,19 @@ struct Memory_Source
     const char* sptr;
     const char* eptr;
 
-    constexpr Memory_Source() noexcept
+    constexpr
+    Memory_Source()
+      noexcept
       : bptr(), sptr(), eptr()  { }
 
-    constexpr Memory_Source(const char* s, size_t n) noexcept
+    constexpr
+    Memory_Source(const char* s, size_t n)
+      noexcept
       : bptr(s), sptr(s), eptr(s + n)  { }
 
     int
-    getc() noexcept
+    getc()
+      noexcept
       {
         int r = -1;
         if(this->sptr != this->eptr) {
@@ -91,7 +97,8 @@ struct Memory_Source
       }
 
     size_t
-    getn(char* s, size_t n) noexcept
+    getn(char* s, size_t n)
+      noexcept
       {
         size_t r = ::std::min(static_cast<size_t>(this->eptr - this->sptr), n);
         if(r != 0) {
@@ -102,7 +109,8 @@ struct Memory_Source
       }
 
     int64_t
-    tell() const noexcept
+    tell()
+      const noexcept
       {
         return this->sptr - this->bptr;
       }
@@ -119,7 +127,8 @@ struct Unified_Source
     Unified_Source(::std::FILE* f) : fp(f)  { }
 
     int
-    getc() const
+    getc()
+      const
       {
         if(this->mem)
           return this->mem->getc();
@@ -132,7 +141,8 @@ struct Unified_Source
       }
 
     size_t
-    getn(char* s, size_t n) const
+    getn(char* s, size_t n)
+      const
       {
         if(this->mem)
           return this->mem->getn(s, n);
@@ -145,7 +155,8 @@ struct Unified_Source
       }
 
     int64_t
-    tell() const
+    tell()
+      const
       {
         if(this->mem)
           return this->mem->tell();
@@ -169,7 +180,8 @@ struct Unified_Sink
     Unified_Sink(::std::FILE* f) : fp(f)  { }
 
     void
-    putc(char c) const
+    putc(char c)
+      const
       {
         if(this->str)
           this->str->push_back(c);
@@ -182,7 +194,8 @@ struct Unified_Sink
       }
 
     void
-    putn(const char* s, size_t n) const
+    putn(const char* s, size_t n)
+      const
       {
         if(this->str)
           this->str->append(s, n);
@@ -202,15 +215,18 @@ struct String_Pool
     struct hash_less
       {
         bool
-        operator()(const ::rocket::phcow_string& x, const ::rocket::phcow_string& y) const noexcept
+        operator()(const ::rocket::phcow_string& x, const ::rocket::phcow_string& y)
+          const noexcept
           { return x.rdhash() < y.rdhash();  }
 
         bool
-        operator()(const ::rocket::phcow_string& x, size_t y) const noexcept
+        operator()(const ::rocket::phcow_string& x, size_t y)
+          const noexcept
           { return x.rdhash() < y;  }
 
         bool
-        operator()(size_t x, const ::rocket::phcow_string& y) const noexcept
+        operator()(size_t x, const ::rocket::phcow_string& y)
+          const noexcept
           { return x < y.rdhash();  }
       };
 
@@ -1327,7 +1343,8 @@ alignas(Value) const char null_storage[sizeof(Value)] = { };
 
 void
 Value::
-do_nonrecursive_destructor() noexcept
+do_nonrecursive_destructor()
+  noexcept
   {
 #ifdef ROCKET_DEBUG
     // Attempt to run out of stack in a rather stupid way.
@@ -1469,28 +1486,32 @@ parse(::std::FILE* fp, Options opts)
 
 void
 Value::
-print_to(::rocket::tinybuf& buf, Options opts) const
+print_to(::rocket::tinybuf& buf, Options opts)
+  const
   {
     do_print_to(&buf, this->m_stor, opts);
   }
 
 void
 Value::
-print_to(::rocket::cow_string& str, Options opts) const
+print_to(::rocket::cow_string& str, Options opts)
+  const
   {
     do_print_to(&str, this->m_stor, opts);
   }
 
 void
 Value::
-print_to(::std::FILE* fp, Options opts) const
+print_to(::std::FILE* fp, Options opts)
+  const
   {
     do_print_to(fp, this->m_stor, opts);
   }
 
 ::rocket::cow_string
 Value::
-to_string(Options opts) const
+to_string(Options opts)
+  const
   {
     ::rocket::cow_string str;
     do_print_to(&str, this->m_stor, opts);
@@ -1499,7 +1520,8 @@ to_string(Options opts) const
 
 void
 Value::
-print_to_stderr(Options opts) const
+print_to_stderr(Options opts)
+  const
   {
     do_print_to(stderr, this->m_stor, opts);
   }
