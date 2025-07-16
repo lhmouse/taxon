@@ -249,7 +249,7 @@ struct String_Pool
   };
 
 void
-do_load_next(Parser_Context& ctx, Unified_Source usrc)
+do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
   {
     ctx.c = usrc.getc();
     if(ctx.c < 0) {
@@ -287,7 +287,7 @@ do_load_next(Parser_Context& ctx, Unified_Source usrc)
 
 ROCKET_FLATTEN
 void
-do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
+do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
   {
     char mbs[MB_LEN_MAX];
     size_t mblen = 1;
@@ -362,7 +362,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
 
 ROCKET_FLATTEN
 void
-do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
+do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
   {
     // Clear the current token and skip whitespace.
     ctx.saved_offset = usrc.tell();
@@ -614,7 +614,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
   }
 
 void
-do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Options opts)
+do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usrc, Options opts)
   {
     // Initialize parser state.
     ::std::memset(&ctx, 0, sizeof(ctx));
@@ -910,7 +910,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
 
 ROCKET_FLATTEN
 void
-do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
+do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& str)
   {
     auto bptr = str.data();
     const auto eptr = str.data() + str.size();
@@ -1041,7 +1041,7 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
   }
 
 void
-do_print_to(Unified_Sink usink, const variant_type& root, Options opts)
+do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
   {
     // Break deep recursion with a handwritten stack.
     struct xFrame
