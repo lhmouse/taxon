@@ -319,11 +319,9 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\"')))
                      | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
                      | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
-          if(mask != 0) {
-            tptr += __builtin_ctz(static_cast<uint32_t>(mask));
-            break;
-          }
-          tptr += 16;
+          tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
+          if(mask != 0)
+            goto break_found_;
         }
 #elif defined __ARM_NEON
         while(usrc.mem->eptr - tptr >= 16) {
@@ -332,19 +330,18 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\"')))
                           | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
                           | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
-          if(mask != 0) {
-            tptr += __builtin_ctzll(mask) >> 2;
-            break;
-          }
-          tptr += 16;
-        }
-#else
-        while(usrc.mem->eptr != tptr) {
-          if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
-            break;
-          ++ tptr;
+          tptr += ROCKET_TZCNT64(mask) >> 2;
+          if(mask != 0)
+            goto break_found_;
         }
 #endif
+        while(usrc.mem->eptr != tptr) {
+          if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
+            goto break_found_;
+          ++ tptr;
+        }
+
+  break_found_:
         if(tptr != usrc.mem->sptr)
           token.append(usrc.mem->sptr, tptr);
         usrc.mem->sptr = tptr;
@@ -383,11 +380,9 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                       | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')))
                       | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))))
                      ^ 0xFFFF;
-          if(mask != 0) {
-            tptr += __builtin_ctz(static_cast<uint32_t>(mask));
-            break;
-          }
-          tptr += 16;
+          tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
+          if(mask != 0)
+            goto break_found_;
         }
 #elif defined __ARM_NEON
         while(usrc.mem->eptr - tptr >= 16) {
@@ -397,19 +392,18 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, Unified_Source usrc)
                            | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\r')))
                            | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\n'))))
                           ^ UINT64_MAX;
-          if(mask != 0) {
-            tptr += __builtin_ctzll(mask) >> 2;
-            break;
-          }
-          tptr += 16;
+          tptr += ROCKET_TZCNT64(mask) >> 2;
+          if(mask != 0)
+            goto break_found_;
         }
-#else
+#endif
         while(usrc.mem->eptr != tptr) {
           if(!is_any(*tptr, ' ', '\t', '\r', '\n'))
             break;
           ++ tptr;
         }
-#endif
+
+  break_found_:
         usrc.mem->sptr = tptr;
       }
       else if(usrc.fp) {
@@ -931,11 +925,9 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
                    | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('/')))
                    | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
                    | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
-        if(mask != 0) {
-          tptr += __builtin_ctz(static_cast<uint32_t>(mask));
-          break;
-        }
-        tptr += 16;
+        tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
+        if(mask != 0)
+          goto break_found_;
       }
 #elif defined __ARM_NEON
       while(eptr - tptr >= 16) {
@@ -945,19 +937,18 @@ do_escape_string_utf16(Unified_Sink usink, const ::rocket::cow_string& str)
                         | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('/')))
                         | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
                         | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
-        if(mask != 0) {
-          tptr += __builtin_ctzll(mask) >> 2;
-          break;
-        }
-        tptr += 16;
+        tptr += ROCKET_TZCNT64(mask) >> 2;
+        if(mask != 0)
+          goto break_found_;
       }
-#else
+#endif
       while(eptr != tptr) {
         if(is_any(*tptr, '\\', '\"', '/') || !is_within(*tptr, 0x20, 0x7E))
           break;
         ++ tptr;
       }
-#endif
+
+  break_found_:
       if(tptr != bptr)
         usink.putn(bptr, static_cast<size_t>(tptr - bptr));
       bptr = tptr;
