@@ -642,76 +642,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
     if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
       return do_err(ctx, "Nesting limit exceeded");
 
-    if(token[0] == '[') {
-      // array
-      do_token(token, ctx, usrc);
-      if(ctx.eof)
-        return do_err(ctx, "Array not terminated properly");
-      else if(ctx.error)
-        return;
-
-      if(token[0] != ']') {
-        // open
-        auto& frm = stack.emplace_back();
-        frm.target = pstor;
-        frm.psa = &(pstor->emplace<V_array>());
-
-        // first
-        pstor = &(frm.psa->emplace_back().mf_stor());
-        goto do_pack_value_loop_;
-      }
-
-      // empty
-      pstor->emplace<V_array>();
-    }
-    else if(token[0] == '{') {
-      // object
-      do_token(token, ctx, usrc);
-      if(ctx.eof)
-        return do_err(ctx, "Object not terminated properly");
-      else if(ctx.error)
-        return;
-
-      if(token[0] != '}') {
-        // open
-        auto& frm = stack.emplace_back();
-        frm.target = pstor;
-        frm.pso = &(pstor->emplace<V_object>());
-
-        // We are inside an object, so this token must be a key string, followed
-        // by a colon, followed by its value.
-        if(token[0] != '\"')
-          return do_err(ctx, "Missing key string");
-
-        auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
-        ROCKET_ASSERT(emr.second);
-
-        do_token(token, ctx, usrc);
-        if(token[0] != ':')
-          return do_err(ctx, "Missing colon");
-
-        do_token(token, ctx, usrc);
-        if(ctx.eof)
-          return do_err(ctx, "Missing value");
-        else if(ctx.error)
-          return;
-
-        // first
-        pstor = &(emr.first->second.mf_stor());
-        goto do_pack_value_loop_;
-      }
-
-      // empty
-      pstor->emplace<V_object>();
-    }
-    else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
-      // number
-      numg.parse_DD(token.data(), token.size());
-      numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
-      if(numg.overflowed())
-        return do_err(ctx, "Number value out of range");
-    }
-    else if(token[0] == '\"') {
+    if(token[0] == '\"') {
       // string
       if((opts & option_json_mode) || (token[1] != '$')) {
         // plain
@@ -826,6 +757,75 @@ do_parse_with(variant_type& root, Parser_Context& ctx, Unified_Source usrc, Opti
       }
       else
         return do_err(ctx, "Unknown type annotator");
+    }
+    else if(token[0] == '[') {
+      // array
+      do_token(token, ctx, usrc);
+      if(ctx.eof)
+        return do_err(ctx, "Array not terminated properly");
+      else if(ctx.error)
+        return;
+
+      if(token[0] != ']') {
+        // open
+        auto& frm = stack.emplace_back();
+        frm.target = pstor;
+        frm.psa = &(pstor->emplace<V_array>());
+
+        // first
+        pstor = &(frm.psa->emplace_back().mf_stor());
+        goto do_pack_value_loop_;
+      }
+
+      // empty
+      pstor->emplace<V_array>();
+    }
+    else if(token[0] == '{') {
+      // object
+      do_token(token, ctx, usrc);
+      if(ctx.eof)
+        return do_err(ctx, "Object not terminated properly");
+      else if(ctx.error)
+        return;
+
+      if(token[0] != '}') {
+        // open
+        auto& frm = stack.emplace_back();
+        frm.target = pstor;
+        frm.pso = &(pstor->emplace<V_object>());
+
+        // We are inside an object, so this token must be a key string, followed
+        // by a colon, followed by its value.
+        if(token[0] != '\"')
+          return do_err(ctx, "Missing key string");
+
+        auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
+        ROCKET_ASSERT(emr.second);
+
+        do_token(token, ctx, usrc);
+        if(token[0] != ':')
+          return do_err(ctx, "Missing colon");
+
+        do_token(token, ctx, usrc);
+        if(ctx.eof)
+          return do_err(ctx, "Missing value");
+        else if(ctx.error)
+          return;
+
+        // first
+        pstor = &(emr.first->second.mf_stor());
+        goto do_pack_value_loop_;
+      }
+
+      // empty
+      pstor->emplace<V_object>();
+    }
+    else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
+      // number
+      numg.parse_DD(token.data(), token.size());
+      numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
+      if(numg.overflowed())
+        return do_err(ctx, "Number value out of range");
     }
     else if(token == "null")
       pstor->emplace<V_null>();
