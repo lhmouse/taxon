@@ -27,6 +27,80 @@ template class ::rocket::cow_hashmap<::rocket::phcow_string,
 namespace taxon {
 namespace {
 
+#if defined __SSE2__
+
+#define TAXON_HAS_SIMD  1
+using simd_word_type = __m128i;
+using simd_mask_type = uint32_t;
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_load(const void* s)
+  noexcept { return _mm_loadu_si128(static_cast<const __m128i*>(s));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_bcast(unsigned char c)
+  noexcept { return _mm_set1_epi8(static_cast<char>(c));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpeq(simd_word_type x, simd_word_type y)
+  noexcept { return _mm_cmpeq_epi8(x, y);  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpgt(simd_word_type x, simd_word_type y)
+  noexcept { return _mm_cmplt_epi8(y, x);  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_movmask(simd_word_type x)
+  noexcept { return static_cast<uint32_t>(_mm_movemask_epi8(x));  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_tzcnt(simd_mask_type m)
+  noexcept { return static_cast<uint32_t>(ROCKET_TZCNT32(0x10000 | m));  }
+
+#elif defined __ARM_NEON
+
+#define TAXON_HAS_SIMD  1
+using simd_word_type = uint8x16_t;
+using simd_mask_type = uint64_t;
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_load(const void* s)
+  noexcept { return vld1q_u8(static_cast<const uint8_t*>(s));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_bcast(unsigned char c)
+  noexcept { return vdupq_n_u8(static_cast<char>(c));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpeq(simd_word_type x, simd_word_type y)
+  noexcept { return vceqq_u8(x, y);  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpgt(simd_word_type x, simd_word_type y)
+  noexcept { return vcltq_u8(x, y);  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_movmask(simd_word_type x)
+  noexcept { return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(t), 4)), 0);  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_tzcnt(simd_mask_type m)
+  noexcept { return static_cast<uint64_t>(ROCKET_TZCNT64(m) >> 2);  }
+
+#endif  // SIMD
+
 using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
 using bytes_type = ::std::aligned_storage<sizeof(variant_type), sizeof(void*)>::type;
 
@@ -44,17 +118,6 @@ is_any(int c, Ts... accept_set)
   {
     return (... || (c == accept_set));
   }
-
-#if defined __ARM_NEON
-ROCKET_ALWAYS_INLINE
-uint64_t
-do_nibble_mask_u8(uint8x16_t t)
-  noexcept
-  {
-    uint8x8_t nt = vshrn_n_u16(vreinterpretq_u16_u8(t), 4);
-    return vget_lane_u64(vreinterpret_u64_u8(nt), 0);
-  }
-#endif  // __ARM_NEON
 
 ROCKET_ALWAYS_INLINE
 void
@@ -312,25 +375,14 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
     if(ROCKET_UNEXPECT(token[0] == '\"')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#if defined __SSE2__
-        while(usrc.mem->eptr - tptr >= 16) {
-          __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')))
-                     | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\"')))
-                     | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
-                     | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
-          tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
-          if(mask != 0)
-            goto break_found_;
-        }
-#elif defined __ARM_NEON
-        while(usrc.mem->eptr - tptr >= 16) {
-          uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
-          uint64_t mask = do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\\')))
-                          | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\"')))
-                          | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
-                          | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
-          tptr += ROCKET_TZCNT64(mask) >> 2;
+#ifdef TAXON_HAS_SIMD
+        while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+          simd_word_type t = simd_load(tptr);
+          simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
+                                | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                                | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
+                                | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+          tptr += simd_tzcnt(mask);
           if(mask != 0)
             goto break_found_;
         }
@@ -372,27 +424,15 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
     while(is_any(ctx.c, -1, ' ', '\t', '\r', '\n')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#if defined __SSE2__
-        while(usrc.mem->eptr - tptr >= 16) {
-          __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-          int mask = (_mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8(' ')))
-                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\t')))
-                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\r')))
-                      | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\n'))))
-                     ^ 0xFFFF;
-          tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
-          if(mask != 0)
-            goto break_found_;
-        }
-#elif defined __ARM_NEON
-        while(usrc.mem->eptr - tptr >= 16) {
-          uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
-          uint64_t mask = (do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8(' ')))
-                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\t')))
-                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\r')))
-                           | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\n'))))
-                          ^ UINT64_MAX;
-          tptr += ROCKET_TZCNT64(mask) >> 2;
+#ifdef TAXON_HAS_SIMD
+        while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+          simd_word_type t = simd_load(tptr);
+          simd_mask_type mask = simd_movmask(simd_bcast(0xFF))
+                                ^ (simd_movmask(simd_cmpeq(t, simd_bcast(' ')))
+                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\t')))
+                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\r')))
+                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\n'))));
+          tptr += simd_tzcnt(mask);
           if(mask != 0)
             goto break_found_;
         }
@@ -917,27 +957,14 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
     for(;;) {
       // Get a sequence of characters that require no escaping.
       auto tptr = bptr;
-#if defined __SSE2__
-      while(eptr - tptr >= 16) {
-        __m128i t = _mm_loadu_si128(reinterpret_cast<const __m128i*>(tptr));
-        int mask = _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\\')))
-                   | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('\"')))
-                   | _mm_movemask_epi8(_mm_cmpeq_epi8(t, _mm_set1_epi8('/')))
-                   | _mm_movemask_epi8(_mm_cmplt_epi8(t, _mm_set1_epi8(0x20)))
-                   | _mm_movemask_epi8(_mm_cmplt_epi8(_mm_set1_epi8(0x7E), t));
-        tptr += ROCKET_TZCNT32(0x10000 | static_cast<uint32_t>(mask));
-        if(mask != 0)
-          goto break_found_;
-      }
-#elif defined __ARM_NEON
-      while(eptr - tptr >= 16) {
-        uint8x16_t t = vld1q_u8(reinterpret_cast<const uint8_t*>(tptr));
-        uint64_t mask = do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\\')))
-                        | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('\"')))
-                        | do_nibble_mask_u8(vceqq_u8(t, vdupq_n_u8('/')))
-                        | do_nibble_mask_u8(vcltq_u8(t, vdupq_n_u8(0x20)))
-                        | do_nibble_mask_u8(vcltq_u8(vdupq_n_u8(0x7E), t));
-        tptr += ROCKET_TZCNT64(mask) >> 2;
+#ifdef TAXON_HAS_SIMD
+      while(eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+        simd_word_type t = simd_load(tptr);
+        simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
+                              | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                              | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
+                              | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+        tptr += simd_tzcnt(mask);
         if(mask != 0)
           goto break_found_;
       }
