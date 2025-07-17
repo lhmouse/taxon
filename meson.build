@@ -60,6 +60,10 @@ if get_option('enable-avx') and (cxx_is_i386 or cxx_is_amd64)
   add_project_arguments('-mavx', language: 'cpp')
 endif
 
+if get_option('enable-avx2') and (cxx_is_i386 or cxx_is_amd64)
+  add_project_arguments('-mavx2', language: 'cpp')
+endif
+
 if get_option('enable-debug-checks')
   add_project_arguments('-D_GLIBCXX_DEBUG', '-D_LIBCPP_DEBUG', language: 'cpp')
 endif

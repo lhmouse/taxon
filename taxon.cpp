@@ -17,6 +17,9 @@
 #include <x86intrin.h>
 #include <xmmintrin.h>
 #endif
+#if defined __AVX2__
+#include <immintrin.h>
+#endif
 #if defined __ARM_NEON
 #include <arm_neon.h>
 #endif
@@ -27,7 +30,43 @@ template class ::rocket::cow_hashmap<::rocket::phcow_string,
 namespace taxon {
 namespace {
 
-#if defined __SSE2__
+#if defined __AVX2__
+
+#define TAXON_HAS_SIMD  1
+using simd_word_type = __m256i;
+using simd_mask_type = uint32_t;
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_load(const void* s)
+  noexcept { return _mm256_loadu_si256(static_cast<const __m256i*>(s));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_bcast(unsigned char c)
+  noexcept { return _mm256_set1_epi8(static_cast<char>(c));  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpeq(simd_word_type x, simd_word_type y)
+  noexcept { return _mm256_cmpeq_epi8(x, y);  }
+
+ROCKET_ALWAYS_INLINE
+simd_word_type
+simd_cmpgt(simd_word_type x, simd_word_type y)
+  noexcept { return _mm256_cmpgt_epi8(x, y);  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_movmask(simd_word_type x)
+  noexcept { return static_cast<uint32_t>(_mm256_movemask_epi8(x));  }
+
+ROCKET_ALWAYS_INLINE
+simd_mask_type
+simd_tzcnt(simd_mask_type m)
+  noexcept { return static_cast<uint32_t>(ROCKET_TZCNT32(m));  }
+
+#elif defined __SSE2__
 
 #define TAXON_HAS_SIMD  1
 using simd_word_type = __m128i;
