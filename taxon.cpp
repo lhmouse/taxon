@@ -490,7 +490,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
 #endif
         while(usrc.mem->eptr != tptr) {
           if(!is_any(*tptr, ' ', '\t', '\r', '\n'))
-            break;
+            goto break_found_;
           ++ tptr;
         }
 
@@ -1022,7 +1022,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
 #endif
       while(eptr != tptr) {
         if(is_any(*tptr, '\\', '\"', '/') || !is_within(*tptr, 0x20, 0x7E))
-          break;
+          goto break_found_;
         ++ tptr;
       }
 
