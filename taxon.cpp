@@ -75,32 +75,38 @@ using simd_mask_type = uint32_t;
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_load(const void* s)
-  noexcept { return _mm_loadu_si128(static_cast<const __m128i*>(s));  }
+  noexcept
+  { return _mm_loadu_si128(static_cast<const __m128i*>(s));  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_bcast(unsigned char c)
-  noexcept { return _mm_set1_epi8(static_cast<char>(c));  }
+  noexcept
+  { return _mm_set1_epi8(static_cast<char>(c));  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_cmpeq(simd_word_type x, simd_word_type y)
-  noexcept { return _mm_cmpeq_epi8(x, y);  }
+  noexcept
+  { return _mm_cmpeq_epi8(x, y);  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_cmpgt(simd_word_type x, simd_word_type y)
-  noexcept { return _mm_cmplt_epi8(y, x);  }
+  noexcept
+  { return _mm_cmplt_epi8(y, x);  }
 
 ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_movmask(simd_word_type x)
-  noexcept { return static_cast<uint32_t>(_mm_movemask_epi8(x));  }
+  noexcept
+  { return static_cast<uint32_t>(_mm_movemask_epi8(x));  }
 
 ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
-  noexcept { return static_cast<uint32_t>(ROCKET_TZCNT32(0x10000 | m));  }
+  noexcept
+  { return static_cast<uint32_t>(ROCKET_TZCNT32(0x10000 | m));  }
 
 #elif defined __ARM_NEON
 
@@ -111,22 +117,26 @@ using simd_mask_type = uint64_t;
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_load(const void* s)
-  noexcept { return vld1q_u8(static_cast<const uint8_t*>(s));  }
+  noexcept
+  { return vld1q_u8(static_cast<const uint8_t*>(s));  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_bcast(unsigned char c)
-  noexcept { return vdupq_n_u8(static_cast<char>(c));  }
+  noexcept
+  { return vdupq_n_u8(static_cast<char>(c));  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_cmpeq(simd_word_type x, simd_word_type y)
-  noexcept { return vceqq_u8(x, y);  }
+  noexcept
+  { return vceqq_u8(x, y);  }
 
 ROCKET_ALWAYS_INLINE
 simd_word_type
 simd_cmpgt(simd_word_type x, simd_word_type y)
-  noexcept { return vcltq_u8(x, y);  }
+  noexcept
+  { return vcltq_u8(x, y);  }
 
 ROCKET_ALWAYS_INLINE
 simd_mask_type
@@ -137,7 +147,8 @@ simd_movmask(simd_word_type x)
 ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
-  noexcept { return static_cast<uint64_t>(ROCKET_TZCNT64(m) >> 2);  }
+  noexcept
+  { return static_cast<uint64_t>(ROCKET_TZCNT64(m) >> 2);  }
 
 #endif  // SIMD
 
