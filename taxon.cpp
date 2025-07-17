@@ -437,7 +437,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
             simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
                                   | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
-                                  | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+                                  | simd_movmask(simd_cmpgt(t, simd_bcast(0x7E)));
             tptr += simd_tzcnt(mask);
             if(mask != 0)
               goto break_found_;
@@ -1027,7 +1027,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
           simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
                                 | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
                                 | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
-                                | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+                                | simd_movmask(simd_cmpgt(t, simd_bcast(0x7E)));
           tptr += simd_tzcnt(mask);
           if(mask != 0)
             goto break_found_;
