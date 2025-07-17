@@ -426,22 +426,23 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
     if(ROCKET_UNEXPECT(token[0] == '\"')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#ifdef TAXON_HAS_SIMD
-        while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
-          simd_word_type t = simd_load(tptr);
-          simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
-                                | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
-                                | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
-                                | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
-          tptr += simd_tzcnt(mask);
-          if(mask != 0)
-            goto break_found_;
-        }
-#endif
         while(usrc.mem->eptr != tptr) {
           if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
             goto break_found_;
           ++ tptr;
+
+#ifdef TAXON_HAS_SIMD
+          while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+            simd_word_type t = simd_load(tptr);
+            simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
+                                  | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                                  | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
+                                  | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+            tptr += simd_tzcnt(mask);
+            if(mask != 0)
+              goto break_found_;
+          }
+#endif
         }
 
   break_found_:
@@ -472,26 +473,33 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
     ctx.error = nullptr;
     token.clear();
 
-    while(is_any(ctx.c, -1, ' ', '\t', '\r', '\n')) {
+    if(ctx.c < 0) {
+      do_load_next(ctx, usrc);
+      if(ctx.c < 0)
+        return;
+    }
+
+    while(is_any(ctx.c, ' ', '\t', '\r', '\n')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#ifdef TAXON_HAS_SIMD
-        while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
-          simd_word_type t = simd_load(tptr);
-          simd_mask_type mask = simd_movmask(simd_bcast(0xFF))
-                                ^ (simd_movmask(simd_cmpeq(t, simd_bcast(' ')))
-                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\t')))
-                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\r')))
-                                   | simd_movmask(simd_cmpeq(t, simd_bcast('\n'))));
-          tptr += simd_tzcnt(mask);
-          if(mask != 0)
-            goto break_found_;
-        }
-#endif
         while(usrc.mem->eptr != tptr) {
           if(!is_any(*tptr, ' ', '\t', '\r', '\n'))
             goto break_found_;
           ++ tptr;
+
+#ifdef TAXON_HAS_SIMD
+          while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+            simd_word_type t = simd_load(tptr);
+            simd_mask_type mask = simd_movmask(simd_bcast(0xFF))
+                                  ^ (simd_movmask(simd_cmpeq(t, simd_bcast(' ')))
+                                     | simd_movmask(simd_cmpeq(t, simd_bcast('\t')))
+                                     | simd_movmask(simd_cmpeq(t, simd_bcast('\r')))
+                                     | simd_movmask(simd_cmpeq(t, simd_bcast('\n'))));
+            tptr += simd_tzcnt(mask);
+            if(mask != 0)
+              goto break_found_;
+          }
+#endif
         }
 
   break_found_:
@@ -1008,22 +1016,23 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
     for(;;) {
       // Get a sequence of characters that require no escaping.
       auto tptr = bptr;
-#ifdef TAXON_HAS_SIMD
-      while(eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
-        simd_word_type t = simd_load(tptr);
-        simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
-                              | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
-                              | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
-                              | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
-        tptr += simd_tzcnt(mask);
-        if(mask != 0)
-          goto break_found_;
-      }
-#endif
       while(eptr != tptr) {
         if(is_any(*tptr, '\\', '\"', '/') || !is_within(*tptr, 0x20, 0x7E))
           goto break_found_;
         ++ tptr;
+
+#ifdef TAXON_HAS_SIMD
+        while(eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+          simd_word_type t = simd_load(tptr);
+          simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
+                                | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                                | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
+                                | simd_movmask(simd_cmpeq(t, simd_bcast(0x7E)));
+          tptr += simd_tzcnt(mask);
+          if(mask != 0)
+            goto break_found_;
+        }
+#endif
       }
 
   break_found_:
