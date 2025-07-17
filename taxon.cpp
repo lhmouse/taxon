@@ -92,7 +92,8 @@ simd_cmpgt(simd_word_type x, simd_word_type y)
 ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_movmask(simd_word_type x)
-  noexcept { return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(t), 4)), 0);  }
+  noexcept
+  { return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(x), 4)), 0);  }
 
 ROCKET_ALWAYS_INLINE
 simd_mask_type
