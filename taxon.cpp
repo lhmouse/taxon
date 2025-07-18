@@ -448,7 +448,7 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
 
   break_found_:
         if(tptr != usrc.mem->sptr)
-          token.append(usrc.mem->sptr, tptr);
+          token.append(usrc.mem->sptr, static_cast<size_t>(tptr - usrc.mem->sptr));
         usrc.mem->sptr = tptr;
       }
       else if(usrc.fp) {
