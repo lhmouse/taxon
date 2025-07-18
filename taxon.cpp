@@ -1029,6 +1029,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
           simd_word_type t = simd_load(tptr);
           simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
                                 | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                                | simd_movmask(simd_cmpeq(t, simd_bcast('/')))
                                 | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
                                 | simd_movmask(simd_cmpgt(t, simd_bcast(0x7E)));
           tptr += simd_tzcnt(mask);
