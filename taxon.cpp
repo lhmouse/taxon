@@ -347,7 +347,7 @@ struct String_Pool
     const ::rocket::phcow_string&
     intern(const char* str, size_t len)
       {
-        size_t hval = ::rocket::cow_string::hash()(str, len);
+        size_t hval = ::rocket::phcow_string::hasher()(str, len);
         auto range = ::std::equal_range(this->st.begin(), this->st.end(), hval, hash_less());
 
         // String already exists?
