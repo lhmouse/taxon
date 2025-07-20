@@ -233,12 +233,12 @@ struct Memory_Source
 struct Unified_Source
   {
     Memory_Source* mem = nullptr;
-    ::rocket::tinybuf* buf = nullptr;
     ::std::FILE* fp = nullptr;
+    ::rocket::tinybuf* buf = nullptr;
 
     Unified_Source(Memory_Source* m) : mem(m)  { }
-    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
     Unified_Source(::std::FILE* f) : fp(f)  { }
+    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
 
     int
     getc()
@@ -246,10 +246,10 @@ struct Unified_Source
       {
         if(this->mem)
           return this->mem->getc();
-        else if(this->buf)
-          return this->buf->getc();
         else if(this->fp)
           return ::fgetc(this->fp);
+        else if(this->buf)
+          return this->buf->getc();
         else
           ROCKET_UNREACHABLE();
       }
@@ -260,10 +260,10 @@ struct Unified_Source
       {
         if(this->mem)
           return this->mem->getn(s, n);
-        else if(this->buf)
-          return this->buf->getn(s, n);
         else if(this->fp)
           return ::fread(s, 1, n, this->fp);
+        else if(this->buf)
+          return this->buf->getn(s, n);
         else
           ROCKET_UNREACHABLE();
       }
