@@ -236,9 +236,17 @@ struct Unified_Source
     Memory_Source* mem = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
-    Unified_Source(Memory_Source* m) : mem(m)  { }
-    Unified_Source(::std::FILE* f) : fp(f)  { }
+    Unified_Source(::rocket::tinybuf* b)
+      noexcept
+      : buf(b)  { }
+
+    Unified_Source(Memory_Source* m)
+      noexcept
+      : mem(m)  { }
+
+    Unified_Source(::std::FILE* f)
+      noexcept
+      : fp(f)  { }
 
     int
     getc()
@@ -284,10 +292,21 @@ struct Unified_Sink
     ::rocket::linear_buffer* ln = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Sink(::rocket::tinybuf* b) : buf(b)  { }
-    Unified_Sink(::rocket::cow_string* s) : str(s)  { }
-    Unified_Sink(::rocket::linear_buffer* l) : ln(l)  { }
-    Unified_Sink(::std::FILE* f) : fp(f)  { }
+    Unified_Sink(::rocket::tinybuf* b)
+      noexcept
+      : buf(b)  { }
+
+    Unified_Sink(::rocket::cow_string* s)
+      noexcept
+      : str(s)  { }
+
+    Unified_Sink(::rocket::linear_buffer* l)
+      noexcept
+      : ln(l)  { }
+
+    Unified_Sink(::std::FILE* f)
+      noexcept
+      : fp(f)  { }
 
     void
     putc(char c)
