@@ -232,13 +232,13 @@ struct Memory_Source
 
 struct Unified_Source
   {
+    ::rocket::tinybuf* buf = nullptr;
     Memory_Source* mem = nullptr;
     ::std::FILE* fp = nullptr;
-    ::rocket::tinybuf* buf = nullptr;
 
+    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
     Unified_Source(Memory_Source* m) : mem(m)  { }
     Unified_Source(::std::FILE* f) : fp(f)  { }
-    Unified_Source(::rocket::tinybuf* b) : buf(b)  { }
 
     int
     getc()
@@ -248,10 +248,8 @@ struct Unified_Source
           return this->mem->getc();
         else if(this->fp)
           return ::fgetc(this->fp);
-        else if(this->buf)
-          return this->buf->getc();
         else
-          ROCKET_UNREACHABLE();
+          return this->buf->getc();
       }
 
     size_t
@@ -262,10 +260,8 @@ struct Unified_Source
           return this->mem->getn(s, n);
         else if(this->fp)
           return ::fread(s, 1, n, this->fp);
-        else if(this->buf)
-          return this->buf->getn(s, n);
         else
-          ROCKET_UNREACHABLE();
+          return this->buf->getn(s, n);
       }
 
     int64_t
@@ -274,23 +270,23 @@ struct Unified_Source
       {
         if(this->mem)
           return this->mem->tell();
-        else if(this->buf)
-          return this->buf->tell();
         else if(this->fp)
           return ::ftello(this->fp);
         else
-          ROCKET_UNREACHABLE();
+          return this->buf->tell();
       }
   };
 
 struct Unified_Sink
   {
-    ::rocket::cow_string* str = nullptr;
     ::rocket::tinybuf* buf = nullptr;
+    ::rocket::cow_string* str = nullptr;
+    ::rocket::linear_buffer* ln = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Sink(::rocket::cow_string* s) : str(s)  { }
     Unified_Sink(::rocket::tinybuf* b) : buf(b)  { }
+    Unified_Sink(::rocket::cow_string* s) : str(s)  { }
+    Unified_Sink(::rocket::linear_buffer* l) : ln(l)  { }
     Unified_Sink(::std::FILE* f) : fp(f)  { }
 
     void
@@ -299,12 +295,12 @@ struct Unified_Sink
       {
         if(this->str)
           this->str->push_back(c);
-        else if(this->buf)
-          this->buf->putc(c);
+        else if(this->ln)
+          this->ln->putc(c);
         else if(this->fp)
           ::fputc(c, this->fp);
         else
-          ROCKET_UNREACHABLE();
+          this->buf->putc(c);
       }
 
     void
@@ -313,12 +309,12 @@ struct Unified_Sink
       {
         if(this->str)
           this->str->append(s, n);
-        else if(this->buf)
-          this->buf->putn(s, n);
+        else if(this->ln)
+          this->ln->putn(s, n);
         else if(this->fp)
           ::fwrite(s, 1, n, this->fp);
         else
-          ROCKET_UNREACHABLE();
+          this->buf->putn(s, n);
       }
   };
 
@@ -1497,6 +1493,14 @@ parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
 
 void
 Value::
+parse_with(Parser_Context& ctx, const ::rocket::linear_buffer& ln, Options opts)
+  {
+    Memory_Source msrc(ln.data(), ln.size());
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
+  }
+
+void
+Value::
 parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts)
   {
     Memory_Source msrc(str, len);
@@ -1533,6 +1537,16 @@ parse(const ::rocket::cow_string& str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str.data(), str.size());
+    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    return !ctx.error;
+  }
+
+bool
+Value::
+parse(const ::rocket::linear_buffer& ln, Options opts)
+  {
+    Parser_Context ctx;
+    Memory_Source msrc(ln.data(), ln.size());
     do_parse_with(this->m_stor, ctx, &msrc, opts);
     return !ctx.error;
   }
@@ -1580,6 +1594,14 @@ print_to(::rocket::cow_string& str, Options opts)
   const
   {
     do_print_to(&str, this->m_stor, opts);
+  }
+
+void
+Value::
+print_to(::rocket::linear_buffer& ln, Options opts)
+  const
+  {
+    do_print_to(&ln, this->m_stor, opts);
   }
 
 void

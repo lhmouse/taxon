@@ -9,6 +9,7 @@
 #include <rocket/cow_hashmap.hpp>
 #include <rocket/prehashed_string.hpp>
 #include <rocket/variant.hpp>
+#include <rocket/linear_buffer.hpp>
 #include <rocket/tinyfmt.hpp>
 #include <chrono>
 namespace taxon {
@@ -717,6 +718,9 @@ class Value
     parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts = options_default);
 
     void
+    parse_with(Parser_Context& ctx, const ::rocket::linear_buffer& ln, Options opts = options_default);
+
+    void
     parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts = options_default);
 
     void
@@ -730,6 +734,9 @@ class Value
 
     bool
     parse(const ::rocket::cow_string& str, Options opts = options_default);
+
+    bool
+    parse(const ::rocket::linear_buffer& ln, Options opts = options_default);
 
     bool
     parse(const char* str, size_t len, Options opts = options_default);
@@ -754,6 +761,10 @@ class Value
 
     void
     print_to(::rocket::cow_string& str, Options opts = options_default)
+      const;
+
+    void
+    print_to(::rocket::linear_buffer& ln, Options opts = options_default)
       const;
 
     void
