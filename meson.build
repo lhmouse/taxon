@@ -56,10 +56,6 @@ if cxx_is_i386
   add_project_arguments('-msse2', '-mfpmath=sse', language: 'cpp')
 endif
 
-if get_option('enable-avx') and (cxx_is_i386 or cxx_is_amd64)
-  add_project_arguments('-mavx', language: 'cpp')
-endif
-
 if get_option('enable-avx2') and (cxx_is_i386 or cxx_is_amd64)
   add_project_arguments('-mavx2', language: 'cpp')
 endif
