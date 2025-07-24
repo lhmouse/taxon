@@ -390,7 +390,7 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
       return do_err(ctx, "Invalid UTF-8 byte");
     else if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
       // Parse a multibyte Unicode character.
-      int u8len = ROCKET_LZCNT32(static_cast<uint32_t>(ctx.c ^ -1) << 24);
+      int u8len = ROCKET_LZCNT32((static_cast<uint32_t>(ctx.c) << 24) ^ UINT32_MAX);
       ctx.c &= (1 << (7 - u8len)) - 1;
       for(int k = 1;  k < u8len;  ++k) {
         int next = usrc.getc();
