@@ -6,8 +6,8 @@
 #include <rocket/tinybuf.hpp>
 #include <rocket/ascii_numput.hpp>
 #include <rocket/ascii_numget.hpp>
-#include <algorithm>
 #include <vector>
+#include <map>
 #include <cmath>
 #include <cstdio>
 #include <climits>
@@ -339,41 +339,23 @@ struct Unified_Sink
 
 struct String_Pool
   {
-    ::std::vector<::rocket::phcow_string> st;
-
-    struct hash_less
-      {
-        bool
-        operator()(const ::rocket::phcow_string& x, const ::rocket::phcow_string& y)
-          const noexcept
-          { return x.rdhash() < y.rdhash();  }
-
-        bool
-        operator()(const ::rocket::phcow_string& x, size_t y)
-          const noexcept
-          { return x.rdhash() < y;  }
-
-        bool
-        operator()(size_t x, const ::rocket::phcow_string& y)
-          const noexcept
-          { return x < y.rdhash();  }
-      };
+    ::std::multimap<size_t, ::rocket::phcow_string> st;
 
     const ::rocket::phcow_string&
     intern(const char* str, size_t len)
       {
         size_t hval = ::rocket::phcow_string::hasher()(str, len);
-        auto range = ::std::equal_range(this->st.begin(), this->st.end(), hval, hash_less());
+        auto range = this->st.equal_range(hval);
 
         // String already exists?
         for(auto it = range.first;  it != range.second;  ++it)
-          if(it->rdstr().equals(str, len))
-            return *it;
+          if((it->second.size() == len) && ::rocket::xmemeq(it->second.data(), str, len))
+            return it->second;
 
         // No. Allocate a new one, while keeping the pool sorted.
-        auto it = this->st.insert(range.second, ::rocket::cow_string(str, len));
-        ROCKET_ASSERT(it->rdhash() == hval);
-        return *it;
+        auto it = this->st.emplace(hval, ::rocket::cow_string(str, len));
+        ROCKET_ASSERT(it->second.rdhash() == hval);
+        return it->second;
       }
   };
 
