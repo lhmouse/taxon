@@ -414,7 +414,6 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
     }
   }
 
-ROCKET_FLATTEN
 void
 do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
   {
