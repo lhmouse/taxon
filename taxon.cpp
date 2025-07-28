@@ -949,20 +949,22 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         else if(ctx.error)
           return;
 
-        if(token[0] == ',') {
+        if(token[0] != ']') {
+          if(token[0] != ',')
+            return do_err(ctx, "Missing comma or closed bracket");
+
           do_token(token, ctx, usrc);
           if(ctx.eof)
             return do_err(ctx, "Missing value");
           else if(ctx.error)
             return;
 
-          // next
-          pstor = &(frm.psa->emplace_back().mf_stor());
-          goto do_pack_value_loop_;
+          if((token[0] != ']') || !(opts & option_allow_trailing_commas)) {
+            // next
+            pstor = &(frm.psa->emplace_back().mf_stor());
+            goto do_pack_value_loop_;
+          }
         }
-
-        if(token[0] != ']')
-          return do_err(ctx, "Missing comma or closed bracket");
       }
       else {
         // object
@@ -972,37 +974,41 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         else if(ctx.error)
           return;
 
-        if(token[0] == ',') {
+        if(token[0] != '}') {
+          if(token[0] != ',')
+            return do_err(ctx, "Missing comma or closed brace");
+
           do_token(token, ctx, usrc);
           if(ctx.eof)
             return do_err(ctx, "Missing key string");
           else if(ctx.error)
             return;
 
-          if(token[0] != '\"')
-            return do_err(ctx, "Missing key string");
+          if((token[0] != '}') || !(opts & option_allow_trailing_commas)) {
+            // We are inside an object, so this token must be a key string,
+            // followed by a colon, followed by its value.
+            if(token[0] != '\"')
+              return do_err(ctx, "Missing key string");
 
-          auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
-          if(!emr.second)
-            return do_err(ctx, "Duplicate key string");
+            auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
+            if(!emr.second)
+              return do_err(ctx, "Duplicate key string");
 
-          do_token(token, ctx, usrc);
-          if(token[0] != ':')
-            return do_err(ctx, "Missing colon");
+            do_token(token, ctx, usrc);
+            if(token[0] != ':')
+              return do_err(ctx, "Missing colon");
 
-          do_token(token, ctx, usrc);
-          if(ctx.eof)
-            return do_err(ctx, "Missing value");
-          else if(ctx.error)
-            return;
+            do_token(token, ctx, usrc);
+            if(ctx.eof)
+              return do_err(ctx, "Missing value");
+            else if(ctx.error)
+              return;
 
-          // next
-          pstor = &(emr.first->second.mf_stor());
-          goto do_pack_value_loop_;
+            // next
+            pstor = &(emr.first->second.mf_stor());
+            goto do_pack_value_loop_;
+          }
         }
-
-        if(token[0] != '}')
-          return do_err(ctx, "Missing comma or closed brace");
       }
 
       // close

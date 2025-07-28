@@ -83,6 +83,10 @@ enum Options : uint32_t
     // limit, but the caller must ensure the source string comes from a trusted
     // source. This option has no effect on the formatter.
     option_bypass_nesting_limit = 0b00000100,
+
+    // Allows trailing commas in arrays and objects when parsing. This option has
+    // no effect on the formatter, which never adds trailing commas.
+    option_allow_trailing_commas = 0b00001000,
   };
 
 ROCKET_DEFINE_ENUM_OPERATORS(Options)

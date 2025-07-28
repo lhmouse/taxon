@@ -407,6 +407,24 @@ main(void)
       assert(val.to_string() == str);
     }
 
+    {
+      // trailing commas
+      ::taxon::Value val;
+      ::taxon::Parser_Context ctx;
+
+      val.parse_with(ctx, &R"([1,2,])");
+      assert(ctx.error);
+
+      val.parse_with(ctx, &R"([1,2,])", ::taxon::option_allow_trailing_commas);
+      assert(ctx.error == nullptr);
+
+      val.parse_with(ctx, &R"({"x":42,})");
+      assert(ctx.error);
+
+      val.parse_with(ctx, &R"({"x":42,})", ::taxon::option_allow_trailing_commas);
+      assert(ctx.error == nullptr);
+    }
+
     // leak check
     assert(::alloc_count == 0);
   }
