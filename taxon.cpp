@@ -455,9 +455,9 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
       }
       else if(usrc.fp) {
         char temp[256];
-        int len;
-        while(::fscanf(usrc.fp, "%256[]-~ !#-[]%n", temp, &len) == 1) {
-          token.append(temp, static_cast<unsigned>(len));
+        size_t len;
+        while(::fscanf(usrc.fp, "%255[]-~ !#-[]%zn", temp, &len) == 1) {
+          token.append(temp, len);
           if(len < 256)
             break;
         }
