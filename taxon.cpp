@@ -3,7 +3,7 @@
 
 #define TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
 #include "taxon.hpp"
-#include <rocket/tinybuf.hpp>
+#include <rocket/tinyfmt.hpp>
 #include <rocket/ascii_numput.hpp>
 #include <rocket/ascii_numget.hpp>
 #include <vector>
@@ -238,13 +238,13 @@ struct Memory_Source
 
 struct Unified_Source
   {
-    ::rocket::tinybuf* buf = nullptr;
+    ::rocket::tinyfmt* fmt = nullptr;
     Memory_Source* mem = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Source(::rocket::tinybuf* b)
+    Unified_Source(::rocket::tinyfmt* b)
       noexcept
-      : buf(b)  { }
+      : fmt(b)  { }
 
     Unified_Source(Memory_Source* m)
       noexcept
@@ -263,7 +263,7 @@ struct Unified_Source
         else if(this->fp)
           return ::fgetc(this->fp);
         else
-          return this->buf->getc();
+          return this->fmt->getc();
       }
 
     size_t
@@ -275,7 +275,7 @@ struct Unified_Source
         else if(this->fp)
           return ::fread(s, 1, n, this->fp);
         else
-          return this->buf->getn(s, n);
+          return this->fmt->getn(s, n);
       }
 
     int64_t
@@ -287,20 +287,20 @@ struct Unified_Source
         else if(this->fp)
           return ::ftello(this->fp);
         else
-          return this->buf->tell();
+          return this->fmt->tell();
       }
   };
 
 struct Unified_Sink
   {
-    ::rocket::tinybuf* buf = nullptr;
+    ::rocket::tinyfmt* fmt = nullptr;
     ::rocket::cow_string* str = nullptr;
     ::rocket::linear_buffer* ln = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Sink(::rocket::tinybuf* b)
+    Unified_Sink(::rocket::tinyfmt* b)
       noexcept
-      : buf(b)  { }
+      : fmt(b)  { }
 
     Unified_Sink(::rocket::cow_string* s)
       noexcept
@@ -325,7 +325,7 @@ struct Unified_Sink
         else if(this->fp)
           ::fputc(c, this->fp);
         else
-          this->buf->putc(c);
+          this->fmt->putc(c);
       }
 
     void
@@ -339,7 +339,7 @@ struct Unified_Sink
         else if(this->fp)
           ::fwrite(s, 1, n, this->fp);
         else
-          this->buf->putn(s, n);
+          this->fmt->putn(s, n);
       }
   };
 
@@ -1481,9 +1481,9 @@ do_nonrecursive_destructor()
 
 void
 Value::
-parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts)
+parse_with(Parser_Context& ctx, ::rocket::tinyfmt& fmt, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, &buf, opts);
+    do_parse_with(this->m_stor, ctx, &fmt, opts);
   }
 
 void
@@ -1527,10 +1527,10 @@ parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
 
 bool
 Value::
-parse(::rocket::tinybuf& buf, Options opts)
+parse(::rocket::tinyfmt& fmt, Options opts)
   {
     Parser_Context ctx;
-    do_parse_with(this->m_stor, ctx, &buf, opts);
+    do_parse_with(this->m_stor, ctx, &fmt, opts);
     return !ctx.error;
   }
 
@@ -1585,10 +1585,10 @@ parse(::std::FILE* fp, Options opts)
 
 void
 Value::
-print_to(::rocket::tinybuf& buf, Options opts)
+print_to(::rocket::tinyfmt& fmt, Options opts)
   const
   {
-    do_print_to(&buf, this->m_stor, opts);
+    do_print_to(&fmt, this->m_stor, opts);
   }
 
 void

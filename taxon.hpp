@@ -716,7 +716,7 @@ class Value
     // object does not have to be initialized. If this function stores an error or
     // or throws an exception, the current value is indeterminate.
     void
-    parse_with(Parser_Context& ctx, ::rocket::tinybuf& buf, Options opts = options_default);
+    parse_with(Parser_Context& ctx, ::rocket::tinyfmt& fmt, Options opts = options_default);
 
     void
     parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts = options_default);
@@ -734,7 +734,7 @@ class Value
     parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts = options_default);
 
     bool
-    parse(::rocket::tinybuf& buf, Options opts = options_default);
+    parse(::rocket::tinyfmt& fmt, Options opts = options_default);
 
     bool
     parse(const ::rocket::cow_string& str, Options opts = options_default);
@@ -760,7 +760,7 @@ class Value
     // which should be configured with `setlocale()`. This function produces an ASCII
     // string.
     void
-    print_to(::rocket::tinybuf& buf, Options opts = options_default)
+    print_to(::rocket::tinyfmt& fmt, Options opts = options_default)
       const;
 
     void
@@ -796,7 +796,7 @@ inline
 ::rocket::tinyfmt&
 operator<<(::rocket::tinyfmt& fmt, const Value& value)
   {
-    value.print_to(fmt.mut_buf());
+    value.print_to(fmt);
     return fmt;
   }
 
