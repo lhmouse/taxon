@@ -853,8 +853,9 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
               return do_err(ctx, "Invalid base64 digit");
           }
 
-          uint32_t temp = ROCKET_HTOBE32(value << 8);
-          bin.append(reinterpret_cast<uint8_t*>(&temp), out_bytes);
+          uint8_t piece[4];
+          ROCKET_STORE_BE32(piece, value << 8);
+          bin.append(piece, out_bytes);
           bptr += 4;
         }
       }
@@ -1279,10 +1280,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
             while(eptr - bptr >= 8) {
               // 8-byte group
               char hex_word[16];
-              uint64_t word;
-
-              ::std::memcpy(&word, bptr, 8);
-              word = ROCKET_BETOH64(word);
+              uint64_t word = ROCKET_LOAD_BE64(bptr);
               bptr += 8;
 
               for(uint32_t t = 0;  t != 16;  ++t) {
@@ -1295,10 +1293,9 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
 
             if(bptr != eptr) {
               // <=7-byte group
-              size_t nrem = static_cast<size_t>(eptr - bptr);
               char hex_word[16];
               uint64_t word = 0;
-
+              size_t nrem = static_cast<size_t>(eptr - bptr);
               for(uint32_t t = 0;  t != nrem;  ++t) {
                 word <<= 8;
                 word |= static_cast<uint64_t>(*bptr) << (64 - nrem * 8);
@@ -1334,10 +1331,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
             while(eptr - bptr >= 3) {
               // 3-byte group
               char b64_word[4];
-              uint32_t word;
-
-              ::std::memcpy(&word, bptr, 4);  // use the null terminator!
-              word = ROCKET_BETOH32(word);
+              uint32_t word = ROCKET_LOAD_BE32(bptr);  // use the null terminator!
               bptr += 3;
 
               for(uint32_t t = 0;  t != 4;  ++t) {
@@ -1352,14 +1346,11 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
               // 1-byte or 2-byte group
               size_t nrem = static_cast<size_t>(eptr - bptr);
               char b64_word[4] = { 0, 0, '=', '=' };
-              uint32_t word = 0;
-
-              ::std::memcpy(&word, bptr, 2);  // use the null terminator!
-              word = ROCKET_BETOH32(word);
+              uint32_t word = ROCKET_LOAD_BE16(bptr);  // use the null terminator!
               bptr += nrem;
 
               for(uint32_t t = 0;  t != nrem + 1;  ++t) {
-                b64_word[t] = base64_digit(word >> 26);
+                b64_word[t] = base64_digit(word >> 10 & 0x3F);
                 word <<= 6;
               }
 
