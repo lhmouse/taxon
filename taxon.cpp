@@ -70,7 +70,7 @@ ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return static_cast<uint32_t>(ROCKET_TZCNT32(m));  }
+  { return ::rocket::tzcnt32(m);  }
 
 #elif defined __SSE2__
 
@@ -112,7 +112,7 @@ ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return static_cast<uint32_t>(ROCKET_TZCNT32(0x10000 | m));  }
+  { return ::rocket::tzcnt32(0x10000 | m);  }
 
 #elif defined __ARM_NEON
 
@@ -154,7 +154,7 @@ ROCKET_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return static_cast<uint64_t>(ROCKET_TZCNT64(m) >> 2);  }
+  { return ::rocket::tzcnt64(m) >> 2;  }
 
 #endif  // SIMD
 
@@ -378,9 +378,9 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
       return do_err(ctx, "Invalid UTF-8 byte");
     else if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
       // Parse a multibyte Unicode character.
-      int u8len = ROCKET_LZCNT32((static_cast<uint32_t>(ctx.c) << 24) ^ UINT32_MAX);
+      uint32_t u8len = ::rocket::lzcnt32((static_cast<uint32_t>(ctx.c) << 24) ^ UINT32_MAX);
       ctx.c &= (1 << (7 - u8len)) - 1;
-      for(int k = 1;  k < u8len;  ++k) {
+      for(uint32_t k = 1;  k < u8len;  ++k) {
         int next = usrc.getc();
         if(next < 0) {
           ctx.eof = true;
@@ -854,7 +854,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
           }
 
           uint8_t piece[4];
-          ROCKET_STORE_BE32(piece, value << 8);
+          ::rocket::store_be<uint32_t>(piece, value << 8);
           bin.append(piece, out_bytes);
           bptr += 4;
         }
@@ -1280,7 +1280,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
             while(eptr - bptr >= 8) {
               // 8-byte group
               char hex_word[16];
-              uint64_t word = ROCKET_LOAD_BE64(bptr);
+              uint64_t word = ::rocket::load_be<uint64_t>(bptr);
               bptr += 8;
 
               for(uint32_t t = 0;  t != 16;  ++t) {
@@ -1331,7 +1331,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
             while(eptr - bptr >= 3) {
               // 3-byte group
               char b64_word[4];
-              uint32_t word = ROCKET_LOAD_BE32(bptr);  // use the null terminator!
+              uint32_t word = ::rocket::load_be<uint32_t>(bptr);  // use the null terminator!
               bptr += 3;
 
               for(uint32_t t = 0;  t != 4;  ++t) {
@@ -1346,7 +1346,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
               // 1-byte or 2-byte group
               size_t nrem = static_cast<size_t>(eptr - bptr);
               char b64_word[4] = { 0, 0, '=', '=' };
-              uint32_t word = ROCKET_LOAD_BE16(bptr);  // use the null terminator!
+              uint32_t word = ::rocket::load_be<uint16_t>(bptr);  // use the null terminator!
               bptr += nrem;
 
               for(uint32_t t = 0;  t != nrem + 1;  ++t) {
