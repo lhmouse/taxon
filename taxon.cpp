@@ -343,27 +343,23 @@ struct Unified_Sink
       }
   };
 
-struct String_Pool
+ROCKET_FLATTEN
+const ::rocket::phcow_string&
+do_intern_string(::std::multimap<size_t, ::rocket::phcow_string>& pool, const char* str, size_t len)
   {
-    ::std::multimap<size_t, ::rocket::phcow_string> st;
+    size_t hval = ::rocket::phcow_string::hasher()(str, len);
+    auto range = pool.equal_range(hval);
 
-    const ::rocket::phcow_string&
-    intern(const char* str, size_t len)
-      {
-        size_t hval = ::rocket::phcow_string::hasher()(str, len);
-        auto range = this->st.equal_range(hval);
-
-        // String already exists?
-        for(auto it = range.first;  it != range.second;  ++it)
-          if((it->second.size() == len) && ::rocket::xmemeq(it->second.data(), str, len))
-            return it->second;
-
-        // No. Allocate a new one, while keeping the pool sorted.
-        auto it = this->st.emplace(hval, ::rocket::cow_string(str, len));
-        ROCKET_ASSERT(it->second.rdhash() == hval);
+    // String already exists?
+    for(auto it = range.first;  it != range.second;  ++it)
+      if((it->second.size() == len) && ::rocket::xmemeq(it->second.data(), str, len))
         return it->second;
-      }
-  };
+
+    // No. Allocate a new one, while keeping the pool sorted.
+    auto it = pool.emplace(hval, ::rocket::cow_string(str, len));
+    ROCKET_ASSERT(it->second.rdhash() == hval);
+    return it->second;
+  }
 
 void
 do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
@@ -734,7 +730,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
     ::std::vector<xFrame> stack;
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
-    String_Pool key_pool;
+    ::std::multimap<size_t, ::rocket::phcow_string> key_pool;
     variant_type* pstor = &root;
 
     do_token(token, ctx, usrc);
@@ -903,7 +899,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         if(token[0] != '\"')
           return do_err(ctx, "Missing key string");
 
-        auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
+        auto emr = frm.pso->try_emplace(do_intern_string(key_pool, token.data() + 1, token.size() - 1));
         ROCKET_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
@@ -991,7 +987,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
             if(token[0] != '\"')
               return do_err(ctx, "Missing key string");
 
-            auto emr = frm.pso->try_emplace(key_pool.intern(token.data() + 1, token.size() - 1));
+            auto emr = frm.pso->try_emplace(do_intern_string(key_pool, token.data() + 1, token.size() - 1));
             if(!emr.second)
               return do_err(ctx, "Duplicate key string");
 
