@@ -424,7 +424,6 @@ do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& u
     if(ROCKET_UNEXPECT(token[0] == '\"')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#pragma GCC unroll 2
         while(usrc.mem->eptr != tptr) {
           if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
             goto break_found_;
@@ -481,7 +480,6 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
     while(is_any(ctx.c, ' ', '\t', '\r', '\n')) {
       if(usrc.mem) {
         auto tptr = usrc.mem->sptr;
-#pragma GCC unroll 2
         while(usrc.mem->eptr != tptr) {
           if(!is_any(*tptr, ' ', '\t', '\r', '\n'))
             goto break_found_;
@@ -1023,7 +1021,6 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
     for(;;) {
       // Get a sequence of characters that require no escaping.
       auto tptr = bptr;
-#pragma GCC unroll 2
       while(eptr != tptr) {
         if(is_any(*tptr, '\\', '\"', '/') || !is_within(*tptr, 0x20, 0x7E))
           goto break_found_;
