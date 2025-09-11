@@ -468,17 +468,18 @@ void
 do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
   {
     // Clear the current token and skip whitespace.
-    ctx.saved_offset = usrc.tell();
     ctx.error = nullptr;
     token.clear();
 
     if(ctx.c < 0) {
+      ctx.saved_offset = usrc.tell();
       do_load_next(ctx, usrc);
       if(ctx.c < 0)
         return;
 
       // Skip the UTF-8 BOM, if any.
       if((ctx.saved_offset == 0) && (ctx.c == 0xFEFF)) {
+        ctx.saved_offset = usrc.tell();
         do_load_next(ctx, usrc);
         if(ctx.c < 0)
           return;
@@ -515,6 +516,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
         (void)! ::fscanf(usrc.fp, "%*[ \t\r\n]");
       }
 
+      ctx.saved_offset = usrc.tell();
       do_load_next(ctx, usrc);
       if(ctx.c < 0)
         return;
