@@ -399,70 +399,6 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
     }
   }
 
-void
-do_mov(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
-  {
-    char mbs[MB_LEN_MAX];
-    size_t mblen = 1;
-
-    mbs[0] = static_cast<char>(ctx.c);
-    if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
-      // Write this multibyte character in the current locale.
-      ::std::mbstate_t mbst = { };
-      mblen = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbst);
-      if(static_cast<int>(mblen) < 0)
-        return do_err(ctx, "Character not representable in current locale");
-    }
-
-    // Always write one character, since `c32rtomb()` may return zero for a
-    // null character.
-    token.push_back(mbs[0]);
-    if(ROCKET_UNEXPECT(mblen > 1))
-      token.append(mbs + 1, mblen - 1);
-
-    // If the token is an incomplete string, then try loading some characters
-    // that are known to require no escaping.
-    if(ROCKET_UNEXPECT(token[0] == '\"')) {
-      if(usrc.mem) {
-        auto tptr = usrc.mem->sptr;
-        while(usrc.mem->eptr != tptr) {
-          if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
-            goto break_found_;
-          ++ tptr;
-
-#ifdef TAXON_HAS_SIMD
-          while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
-            simd_word_type t = simd_load(tptr);
-            simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
-                                  | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
-                                  | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
-                                  | simd_movmask(simd_cmpgt(t, simd_bcast(0x7E)));
-            tptr += simd_tzcnt(mask);
-            if(mask != 0)
-              goto break_found_;
-          }
-#endif
-        }
-
-  break_found_:
-        if(tptr != usrc.mem->sptr)
-          token.append(usrc.mem->sptr, static_cast<size_t>(tptr - usrc.mem->sptr));
-        usrc.mem->sptr = tptr;
-      }
-      else if(usrc.fp) {
-        char temp[256];
-        size_t len;
-        while(::fscanf(usrc.fp, "%255[]-~ !#-[]%zn", temp, &len) == 1) {
-          token.append(temp, len);
-          if(len < 256)
-            break;
-        }
-      }
-    }
-
-    do_load_next(ctx, usrc);
-  }
-
 ROCKET_FLATTEN
 void
 do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
@@ -622,15 +558,53 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
         // Take a double-quoted string. When stored in `token`, it shall start
         // with a double-quote character, followed by the decoded string. No
         // terminating double-quote character is appended.
-        do_mov(token, ctx, usrc);
-        while(ctx.c != '\"')
+        token.push_back('\"');
+        for(;;) {
+          if(usrc.mem) {
+            auto tptr = usrc.mem->sptr;
+            while(usrc.mem->eptr != tptr) {
+              if(is_any(*tptr, '\\', '\"') || !is_within(*tptr, 0x20, 0x7E))
+                goto escape_found_;
+              ++ tptr;
+
+#ifdef TAXON_HAS_SIMD
+              while(usrc.mem->eptr - tptr >= static_cast<ptrdiff_t>(sizeof(simd_word_type))) {
+                simd_word_type t = simd_load(tptr);
+                simd_mask_type mask = simd_movmask(simd_cmpeq(t, simd_bcast('\\')))
+                                      | simd_movmask(simd_cmpeq(t, simd_bcast('\"')))
+                                      | simd_movmask(simd_cmpgt(simd_bcast(0x20), t))
+                                      | simd_movmask(simd_cmpgt(t, simd_bcast(0x7E)));
+                tptr += simd_tzcnt(mask);
+                if(mask != 0)
+                  goto escape_found_;
+              }
+#endif
+            }
+
+  escape_found_:
+            if(tptr != usrc.mem->sptr)
+              token.append(usrc.mem->sptr, static_cast<size_t>(tptr - usrc.mem->sptr));
+            usrc.mem->sptr = tptr;
+          }
+          else if(usrc.fp) {
+            char temp[256];
+            size_t len;
+            while(::fscanf(usrc.fp, "%255[]-~ !#-[]%zn", temp, &len) == 1) {
+              token.append(temp, len);
+              if(len < 256)
+                break;
+            }
+          }
+
+          do_load_next(ctx, usrc);
           if(ctx.eof)
             return do_err(ctx, "String not terminated properly");
           else if((ctx.c <= 0x1F) || (ctx.c == 0x7F))
             return do_err(ctx, "Control character not allowed in string");
-          else if(ROCKET_EXPECT(ctx.c != '\\'))
-            do_mov(token, ctx, usrc);
-          else {
+          else if(ctx.c == '\"')
+            break;
+
+          if(ROCKET_UNEXPECT(ctx.c == '\\')) {
             // Read an escape sequence.
             int next = usrc.getc();
             if(next < 0) {
@@ -724,10 +698,22 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
               default:
                 return do_err(ctx, "Invalid escape sequence");
               }
-
-            // Move the unescaped character into the token.
-            do_mov(token, ctx, usrc);
           }
+
+          // Move the unescaped character into the token.
+          if(ROCKET_EXPECT(ctx.c <= 0x7F))
+            token.push_back(static_cast<char>(ctx.c));
+          else {
+            char mbs[MB_LEN_MAX];
+            ::std::mbstate_t mbst = { };
+            size_t mblen = ::std::c32rtomb(mbs, static_cast<char32_t>(ctx.c), &mbst);
+            if(static_cast<int>(mblen) < 0)
+              return do_err(ctx, "Character not representable in current locale");
+
+            ROCKET_ASSERT(mblen != 0);
+            token.append(mbs, mblen);
+          }
+        }
 
         // Drop the terminating quotation mark for simplicity; do not attempt to
         // get the next character, as the stream may be blocking but we can't
