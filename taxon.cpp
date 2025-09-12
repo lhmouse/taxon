@@ -538,37 +538,57 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
         ctx.c = -1;
         break;
 
-      case '0' ... '9':
       case '+':
       case '-':
         // Take a floating-point number. Strictly, JSON doesn't allow plus signs
         // or leading zeroes, but we accept them as extensions.
-        do
-          do_mov(token, ctx, usrc);
+        if(is_any(ctx.c, '+', '-')) {
+          token.push_back(static_cast<char>(ctx.c));
+          do_load_next(ctx, usrc);
+        }
+
+        if(!is_within(ctx.c, '0', '9'))
+          return do_err(ctx, "Invalid number");
+
+        // fallthrough
+      case '0' ... '9':
+        do {
+          token.push_back(static_cast<char>(ctx.c));
+          do_load_next(ctx, usrc);
+        }
         while(is_within(ctx.c, '0', '9'));
 
         if(ctx.c == '.') {
-          do_mov(token, ctx, usrc);
+          token.push_back(static_cast<char>(ctx.c));
+          do_load_next(ctx, usrc);
+
           if(!is_within(ctx.c, '0', '9'))
             return do_err(ctx, "Invalid number");
-          else {
-            do
-              do_mov(token, ctx, usrc);
-            while(is_within(ctx.c, '0', '9'));
+
+          do {
+            token.push_back(static_cast<char>(ctx.c));
+            do_load_next(ctx, usrc);
           }
+          while(is_within(ctx.c, '0', '9'));
         }
 
         if(is_any(ctx.c, 'e', 'E')) {
-          do_mov(token, ctx, usrc);
-          if(is_any(ctx.c, '+', '-'))
-            do_mov(token, ctx, usrc);
+          token.push_back(static_cast<char>(ctx.c));
+          do_load_next(ctx, usrc);
+
+          if(is_any(ctx.c, '+', '-')) {
+            token.push_back(static_cast<char>(ctx.c));
+            do_load_next(ctx, usrc);
+          }
+
           if(!is_within(ctx.c, '0', '9'))
             return do_err(ctx, "Invalid number");
-          else {
-            do
-              do_mov(token, ctx, usrc);
-            while(is_within(ctx.c, '0', '9'));
+
+          do {
+            token.push_back(static_cast<char>(ctx.c));
+            do_load_next(ctx, usrc);
           }
+          while(is_within(ctx.c, '0', '9'));
         }
 
         // If the end of input has been reached, `ctx.error` may be set. We will
@@ -578,14 +598,16 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
         ctx.eof = false;
         break;
 
-      case 'A' ... 'Z':
-      case 'a' ... 'z':
       case '_':
       case '$':
+      case 'A' ... 'Z':
+      case 'a' ... 'z':
         // Take an identifier. As in JavaScript, we accept dollar signs in
         // identifiers as an extension.
-        do
-          do_mov(token, ctx, usrc);
+        do {
+          token.push_back(static_cast<char>(ctx.c));
+          do_load_next(ctx, usrc);
+        }
         while(is_any(ctx.c, '_', '$') || is_within(ctx.c, 'A', 'Z')
               || is_within(ctx.c, 'a', 'z') || is_within(ctx.c, '0', '9'));
 
