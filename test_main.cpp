@@ -329,6 +329,10 @@ main(void)
       ::taxon::Value val;
       ::taxon::Parser_Context ctx;
 
+      val.parse_with(ctx, &"");
+      assert(ctx.offset == 0);
+      assert(::std::strcmp(ctx.error, "Blank input") == 0);
+
       val.parse_with(ctx, &R"(#)");
       assert(ctx.offset == 0);
       assert(::std::strcmp(ctx.error, "Invalid character") == 0);

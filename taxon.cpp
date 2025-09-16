@@ -750,6 +750,9 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
     if(ctx.error)
       return;
 
+    if(token.empty())
+      return do_err(ctx, "Blank input");
+
   do_pack_value_loop_:
     if(!(opts & option_bypass_nesting_limit) && (stack.size() > 32))
       return do_err(ctx, "Nesting limit exceeded");
