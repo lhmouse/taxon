@@ -821,7 +821,8 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
     }
     else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
       // number
-      numg.parse_DD(token.data(), token.size());
+      size_t n = numg.parse_DD(token.data(), token.size());
+      ROCKET_ASSERT(n == token.size());
       numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
       if(numg.overflowed())
         return do_err(ctx, "Number out of range");
