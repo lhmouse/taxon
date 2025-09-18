@@ -1,7 +1,6 @@
 // This file is part of TAXON.
 // Copyleft 2024-2025, LH_Mouse. All wrongs reserved.
 
-#define TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
 #include "taxon.hpp"
 #include <rocket/tinyfmt.hpp>
 #include <rocket/ascii_numput.hpp>
@@ -157,9 +156,6 @@ simd_tzcnt(simd_mask_type m)
   { return ::rocket::tzcnt64(m) >> 2;  }
 
 #endif  // SIMD
-
-using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
-using bytes_type = ::std::aligned_storage<sizeof(variant_type), sizeof(void*)>::type;
 
 constexpr ROCKET_ALWAYS_INLINE
 bool
@@ -726,16 +722,17 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
   }
 
 void
-do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usrc, Options opts)
+do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Options opts)
   {
     // Initialize parser state.
+    root.clear();
     ::std::memset(&ctx, 0, sizeof(ctx));
     ctx.c = -1;
 
     // Break deep recursion with a handwritten stack.
     struct xFrame
       {
-        variant_type* target;
+        Value* target;
         V_array* psa;
         V_object* pso;
       };
@@ -744,7 +741,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
     ::rocket::cow_string token;
     ::rocket::ascii_numget numg;
     ::std::multimap<size_t, ::rocket::phcow_string> key_pool;
-    variant_type* pstor = &root;
+    Value* pstor = &root;
 
     do_token(token, ctx, usrc);
     if(ctx.error)
@@ -769,15 +766,15 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         // open
         auto& frm = stack.emplace_back();
         frm.target = pstor;
-        frm.psa = &(pstor->emplace<V_array>());
+        frm.psa = &(pstor->open_array());
 
         // first
-        pstor = &(frm.psa->emplace_back().mf_stor());
+        pstor = &(frm.psa->emplace_back());
         goto do_pack_value_loop_;
       }
 
       // empty
-      pstor->emplace<V_array>();
+      pstor->open_array();
     }
     else if(token[0] == '{') {
       // object
@@ -791,7 +788,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         // open
         auto& frm = stack.emplace_back();
         frm.target = pstor;
-        frm.pso = &(pstor->emplace<V_object>());
+        frm.pso = &(pstor->open_object());
 
         // We are inside an object, so this token must be a key string, followed
         // by a colon, followed by its value.
@@ -812,18 +809,18 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
           return;
 
         // first
-        pstor = &(emr.first->second.mf_stor());
+        pstor = &(emr.first->second);
         goto do_pack_value_loop_;
       }
 
       // empty
-      pstor->emplace<V_object>();
+      pstor->open_object();
     }
     else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
       // number
       size_t n = numg.parse_DD(token.data(), token.size());
       ROCKET_ASSERT(n == token.size());
-      numg.cast_D(pstor->emplace<V_number>(), -DBL_MAX, DBL_MAX);
+      numg.cast_D(pstor->open_number(), -DBL_MAX, DBL_MAX);
       if(numg.overflowed())
         return do_err(ctx, "Number out of range");
     }
@@ -831,14 +828,14 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
       // string
       if((opts & option_json_mode) || (token[1] != '$')) {
         // plain
-        pstor->emplace<V_string>(token.data() + 1, token.size() - 1);
+        pstor->open_string().assign(token.data() + 1, token.size() - 1);
       }
       else if((token[2] == 'l') && (token[3] == ':')) {
         // 64-bit integer
         if(numg.parse_I(token.data() + 4, token.size() - 4) != token.size() - 4)
           return do_err(ctx, "Invalid 64-bit integer");
 
-        numg.cast_I(pstor->emplace<V_integer>(), INT64_MIN, INT64_MAX);
+        numg.cast_I(pstor->open_integer(), INT64_MIN, INT64_MAX);
         if(numg.overflowed())
           return do_err(ctx, "64-bit integer value out of range");
       }
@@ -849,11 +846,11 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
 
         // Values that are out of range are converted to infinities and are
         // always accepted.
-        numg.cast_D(pstor->emplace<V_number>(), -HUGE_VAL, HUGE_VAL);
+        numg.cast_D(pstor->open_number(), -HUGE_VAL, HUGE_VAL);
       }
       else if((token[2] == 's') && (token[3] == ':')) {
         // annotated string
-        pstor->emplace<V_string>(token.data() + 4, token.size() - 4);
+        pstor->open_string().assign(token.data() + 4, token.size() - 4);
       }
       else if((token[2] == 't') && (token[3] == ':')) {
         // timestamp in milliseconds
@@ -864,7 +861,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         // '9999-12-31T23:59:59.999Z'.
         int64_t count;
         numg.cast_I(count, -2208988800000, 253402300799999);
-        pstor->emplace<V_time>(::std::chrono::milliseconds(count));
+        pstor->open_time() = V_time(::std::chrono::milliseconds(count));
         if(numg.overflowed())
           return do_err(ctx, "Timestamp value out of range");
       }
@@ -874,7 +871,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         if(units * 2 != token.size() - 4)
           return do_err(ctx, "Invalid hex string");
 
-        auto& bin = pstor->emplace<V_binary>();
+        auto& bin = pstor->open_binary();
         bin.reserve(units);
 
         auto bptr = token.data() + 4;
@@ -904,7 +901,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         if(units * 4 != token.size() - 4)
           return do_err(ctx, "Invalid base64 string");
 
-        auto& bin = pstor->emplace<V_binary>();
+        auto& bin = pstor->open_binary();
         bin.reserve(units);
 
         auto bptr = token.data() + 4;
@@ -945,11 +942,11 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
         return do_err(ctx, "Unknown type annotator");
     }
     else if(token == "null")
-      pstor->emplace<V_null>();
+      pstor->clear();
     else if(token == "true")
-      pstor->emplace<V_boolean>(true);
+      pstor->open_boolean() = true;
     else if(token == "false")
-      pstor->emplace<V_boolean>(false);
+      pstor->open_boolean() = false;
     else
       return do_err(ctx, "Invalid token");
 
@@ -975,7 +972,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
 
           if((token[0] != ']') || !(opts & option_allow_trailing_commas)) {
             // next
-            pstor = &(frm.psa->emplace_back().mf_stor());
+            pstor = &(frm.psa->emplace_back());
             goto do_pack_value_loop_;
           }
         }
@@ -1019,7 +1016,7 @@ do_parse_with(variant_type& root, Parser_Context& ctx, const Unified_Source& usr
               return;
 
             // next
-            pstor = &(emr.first->second.mf_stor());
+            pstor = &(emr.first->second);
             goto do_pack_value_loop_;
           }
         }
@@ -1153,7 +1150,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
   }
 
 void
-do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
+do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
   {
     // Break deep recursion with a handwritten stack.
     struct xFrame
@@ -1166,23 +1163,23 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
 
     ::std::vector<xFrame> stack;
     ::rocket::ascii_numput nump;
-    const variant_type* pstor = &root;
+    const Value* pstor = &root;
 
   do_unpack_loop_:
-    switch(static_cast<Type>(pstor->index()))
+    switch(pstor->type())
       {
       case t_null:
         usink.putn("null", 4);
         break;
 
       case t_array:
-        if(!pstor->as<V_array>().empty()) {
+        if(!pstor->as_array().empty()) {
           // open
           auto& frm = stack.emplace_back();
-          frm.psa = &(pstor->as<V_array>());
+          frm.psa = &(pstor->as_array());
           frm.ita = frm.psa->begin();
           usink.putc('[');
-          pstor = &(frm.ita->mf_stor());
+          pstor = &*(frm.ita);
           goto do_unpack_loop_;
         }
 
@@ -1190,15 +1187,15 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         break;
 
       case t_object:
-        if(!pstor->as<V_object>().empty()) {
+        if(!pstor->as_object().empty()) {
           // open
           auto& frm = stack.emplace_back();
-          frm.pso = &(pstor->as<V_object>());
+          frm.pso = &(pstor->as_object());
           frm.ito = frm.pso->begin();
           usink.putn("{\"", 2);
           do_escape_string_utf16(usink, frm.ito->first.rdstr());
           usink.putn("\":", 2);
-          pstor = &(frm.ito->second.mf_stor());
+          pstor = &(frm.ito->second);
           goto do_unpack_loop_;
         }
 
@@ -1206,19 +1203,19 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         break;
 
       case t_boolean:
-        nump.put_TB(pstor->as<V_boolean>());
+        nump.put_TB(pstor->as_boolean());
         usink.putn(nump.data(), nump.size());
         break;
 
       case t_integer:
         if(opts & option_json_mode) {
           // as floating-point number; inaccurate for large values
-          nump.put_DD(static_cast<V_number>(pstor->as<V_integer>()));
+          nump.put_DD(static_cast<V_number>(pstor->as_integer()));
           usink.putn(nump.data(), nump.size());
         }
         else {
           // precise; annotated
-          nump.put_DI(pstor->as<V_integer>());
+          nump.put_DI(pstor->as_integer());
           usink.putn("\"$l:", 4);
           usink.putn(nump.data(), nump.size());
           usink.putc('\"');
@@ -1226,9 +1223,9 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         break;
 
       case t_number:
-        if(::std::isfinite(pstor->as<V_number>())) {
+        if(::std::isfinite(pstor->as_number())) {
           // finite; unquoted
-          nump.put_DD(pstor->as<V_number>());
+          nump.put_DD(pstor->as_number());
           usink.putn(nump.data(), nump.size());
         }
         else if(opts & option_json_mode) {
@@ -1238,23 +1235,23 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         else {
           // non-finite; annotated
           usink.putn("\"$d:", 4);
-          nump.put_DD(pstor->as<V_number>());
+          nump.put_DD(pstor->as_number());
           usink.putn(nump.data(), nump.size());
           usink.putc('\"');
         }
         break;
 
       case t_string:
-        if((opts & option_json_mode) || (pstor->as<V_string>()[0] != '$')) {
+        if((opts & option_json_mode) || (pstor->as_string()[0] != '$')) {
           // general; quoted
           usink.putc('\"');
-          do_escape_string_utf16(usink, pstor->as<V_string>());
+          do_escape_string_utf16(usink, pstor->as_string());
           usink.putc('\"');
         }
         else {
           // starts with `$`; annotated
           usink.putn("\"$s:", 4);
-          do_escape_string_utf16(usink, pstor->as<V_string>());
+          do_escape_string_utf16(usink, pstor->as_string());
           usink.putc('\"');
         }
         break;
@@ -1266,16 +1263,16 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         }
         else {
           // annotated
-          auto bptr = pstor->as<V_binary>().data();
-          const auto eptr = bptr + pstor->as<V_binary>().size();
+          auto bptr = pstor->as_binary().data();
+          const auto eptr = bptr + pstor->as_binary().size();
 
           bool use_hex = true;
           if(opts & option_bin_as_base64)
             use_hex = false;
           else
-            use_hex = (pstor->as<V_binary>().size() <= 4)  // small
-                      || ((pstor->as<V_binary>().size() % 4 == 0)
-                          && (pstor->as<V_binary>().size() / 4 <= 8));
+            use_hex = (pstor->as_binary().size() <= 4)  // small
+                      || ((pstor->as_binary().size() % 4 == 0)
+                          && (pstor->as_binary().size() / 4 <= 8));
 
           if(use_hex) {
             // hex
@@ -1381,7 +1378,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         else {
           // annotated
           nump.put_DI(::std::chrono::time_point_cast<::std::chrono::milliseconds>(
-                                pstor->as<V_time>()).time_since_epoch().count());
+                                pstor->as_time()).time_since_epoch().count());
           usink.putn("\"$t:", 4);
           usink.putn(nump.data(), nump.size());
           usink.putc('\"');
@@ -1390,8 +1387,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
 
       default:
         ::rocket::sprintf_and_throw<::std::invalid_argument>(
-              "taxon::Value: unknown type enumeration `%d`",
-              static_cast<int>(pstor->index()));
+              "taxon::Value: unknown type enumeration `%d`", pstor->type());
       }
 
     while(!stack.empty()) {
@@ -1401,7 +1397,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
         if(++ frm.ita != frm.psa->end()) {
           // next
           usink.putc(',');
-          pstor = &(frm.ita->mf_stor());
+          pstor = &*(frm.ita);
           goto do_unpack_loop_;
         }
 
@@ -1415,7 +1411,7 @@ do_print_to(const Unified_Sink& usink, const variant_type& root, Options opts)
           usink.putn(",\"", 2);
           do_escape_string_utf16(usink, frm.ito->first.rdstr());
           usink.putn("\":", 2);
-          pstor = &(frm.ito->second.mf_stor());
+          pstor = &(frm.ito->second);
           goto do_unpack_loop_;
         }
 
@@ -1453,6 +1449,7 @@ do_nonrecursive_destructor()
 #endif
 
     // Break deep recursion with a handwritten stack.
+    using bytes_type = ::std::aligned_storage<sizeof(m_stor), sizeof(void*)>::type;
     ::std::vector<bytes_type> stack;
 
   do_unpack_loop_:
@@ -1495,7 +1492,7 @@ void
 Value::
 parse_with(Parser_Context& ctx, ::rocket::tinyfmt& fmt, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, &fmt, opts);
+    do_parse_with(*this, ctx, &fmt, opts);
   }
 
 void
@@ -1503,7 +1500,7 @@ Value::
 parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
   {
     Memory_Source msrc(str.data(), str.size());
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
   }
 
 void
@@ -1511,7 +1508,7 @@ Value::
 parse_with(Parser_Context& ctx, const ::rocket::linear_buffer& ln, Options opts)
   {
     Memory_Source msrc(ln.data(), ln.size());
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
   }
 
 void
@@ -1519,7 +1516,7 @@ Value::
 parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts)
   {
     Memory_Source msrc(str, len);
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
   }
 
 void
@@ -1527,14 +1524,14 @@ Value::
 parse_with(Parser_Context& ctx, const char* str, Options opts)
   {
     Memory_Source msrc(str, ::strlen(str));
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
   }
 
 void
 Value::
 parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
   {
-    do_parse_with(this->m_stor, ctx, fp, opts);
+    do_parse_with(*this, ctx, fp, opts);
   }
 
 bool
@@ -1542,7 +1539,7 @@ Value::
 parse(::rocket::tinyfmt& fmt, Options opts)
   {
     Parser_Context ctx;
-    do_parse_with(this->m_stor, ctx, &fmt, opts);
+    do_parse_with(*this, ctx, &fmt, opts);
     return !ctx.error;
   }
 
@@ -1552,7 +1549,7 @@ parse(const ::rocket::cow_string& str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str.data(), str.size());
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1562,7 +1559,7 @@ parse(const ::rocket::linear_buffer& ln, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(ln.data(), ln.size());
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1572,7 +1569,7 @@ parse(const char* str, size_t len, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str, len);
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1582,7 +1579,7 @@ parse(const char* str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str, ::strlen(str));
-    do_parse_with(this->m_stor, ctx, &msrc, opts);
+    do_parse_with(*this, ctx, &msrc, opts);
     return !ctx.error;
   }
 
@@ -1591,7 +1588,7 @@ Value::
 parse(::std::FILE* fp, Options opts)
   {
     Parser_Context ctx;
-    do_parse_with(this->m_stor, ctx, fp, opts);
+    do_parse_with(*this, ctx, fp, opts);
     return !ctx.error;
   }
 
@@ -1600,7 +1597,7 @@ Value::
 print_to(::rocket::tinyfmt& fmt, Options opts)
   const
   {
-    do_print_to(&fmt, this->m_stor, opts);
+    do_print_to(&fmt, *this, opts);
   }
 
 void
@@ -1608,7 +1605,7 @@ Value::
 print_to(::rocket::cow_string& str, Options opts)
   const
   {
-    do_print_to(&str, this->m_stor, opts);
+    do_print_to(&str, *this, opts);
   }
 
 void
@@ -1616,7 +1613,7 @@ Value::
 print_to(::rocket::linear_buffer& ln, Options opts)
   const
   {
-    do_print_to(&ln, this->m_stor, opts);
+    do_print_to(&ln, *this, opts);
   }
 
 void
@@ -1624,7 +1621,7 @@ Value::
 print_to(::std::FILE* fp, Options opts)
   const
   {
-    do_print_to(fp, this->m_stor, opts);
+    do_print_to(fp, *this, opts);
   }
 
 ::rocket::cow_string
@@ -1633,7 +1630,7 @@ to_string(Options opts)
   const
   {
     ::rocket::cow_string str;
-    do_print_to(&str, this->m_stor, opts);
+    do_print_to(&str, *this, opts);
     return str;
   }
 
@@ -1642,7 +1639,7 @@ Value::
 print_to_stderr(Options opts)
   const
   {
-    do_print_to(stderr, this->m_stor, opts);
+    do_print_to(stderr, *this, opts);
   }
 
 }  // namespace taxon

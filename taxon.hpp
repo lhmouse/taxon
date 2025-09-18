@@ -121,11 +121,6 @@ class Value
       noexcept;
 
   public:
-#ifdef TAXON_DETAILS_DB168D30_B229_44D5_8C4C_7B3C52C686DD_
-    const variant_type& mf_stor() const noexcept { return this->m_stor;  }
-    variant_type& mf_stor() noexcept { return this->m_stor;  }
-#endif
-
     // Initializes a null value.
     constexpr
     Value(V_null = nullptr)
