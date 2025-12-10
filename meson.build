@@ -22,6 +22,7 @@ project('taxon',
 #===========================================================
 # Global configuration
 #===========================================================
+
 ver = configuration_data()
 ver.set('abi_major', meson.project_version().split('.')[0])
 ver.set('abi_minor', meson.project_version().split('.')[1])
@@ -64,6 +65,7 @@ endif
 #===========================================================
 # Build rules
 #===========================================================
+
 dep_asteria = dependency('asteria')
 
 install_headers('taxon.hpp')
