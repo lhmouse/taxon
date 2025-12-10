@@ -74,7 +74,7 @@ lib_taxon = both_libraries('taxon',
       sources: [ 'taxon.cpp' ],
       dependencies: [ dep_asteria ],
       soversion: ver.get('abi_major'),
-      version: '.'.join([ ver.get('abi_major'), ver.get('abi_minor'), '0' ]),
+      version: '.'.join(ver.get('abi_major'), ver.get('abi_minor'), '0'),
       install: true)
 
 import('pkgconfig').generate(lib_taxon,
