@@ -504,8 +504,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
       case '0' ... '9':
           token.push_back(static_cast<char>(ctx.c));
           do_load_next(ctx, usrc);
-        }
-        while(is_within(ctx.c, '0', '9'));
+        } while(is_within(ctx.c, '0', '9'));
 
         if(ctx.c == '.') {
           token.push_back(static_cast<char>(ctx.c));
@@ -517,8 +516,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
           do {
             token.push_back(static_cast<char>(ctx.c));
             do_load_next(ctx, usrc);
-          }
-          while(is_within(ctx.c, '0', '9'));
+          } while(is_within(ctx.c, '0', '9'));
         }
 
         if(is_any(ctx.c, 'e', 'E')) {
@@ -536,8 +534,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
           do {
             token.push_back(static_cast<char>(ctx.c));
             do_load_next(ctx, usrc);
-          }
-          while(is_within(ctx.c, '0', '9'));
+          } while(is_within(ctx.c, '0', '9'));
         }
 
         // If the end of input has been reached, `ctx.error` may be set. We will
