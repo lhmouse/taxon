@@ -1,5 +1,5 @@
 // This file is part of TAXON.
-// Copyleft 2024-2025, LH_Mouse. All wrongs reserved.
+// Copyleft 2024-2026, LH_Mouse. All wrongs reserved.
 
 #include "taxon.hpp"
 #include <rocket/tinyfmt.hpp>
