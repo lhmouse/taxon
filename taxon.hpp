@@ -682,7 +682,7 @@ class Value
       const
       { return this->m_stor.as<V_time>();  }
 
-    // Gets or creates a byte string. If the stored value is not a byte string, it
+    // Gets or creates a timestamp. If the stored value is not a timestamp, it
     // is overwritten with a zero timestamp denoting `1970-01-01T00:00:00Z`, and a
     // reference to the new value is returned.
     V_time&
