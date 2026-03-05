@@ -1069,7 +1069,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
         case '\"':
         case '/':
           {
-            char temp[2] = { '\\', *tptr };
+            char temp[2] = { '\\', static_cast<char>(next) };
             usink.putn(temp, 2);
           }
           break;
@@ -1096,7 +1096,7 @@ do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& st
 
         default:
           if(is_within(next, 0x20, 0x7E))
-            usink.putc(*tptr);
+            usink.putc(static_cast<char>(next));
           else {
             // Read a multibyte character.
             char16_t c16;
@@ -1439,7 +1439,7 @@ do_nonrecursive_destructor()
 
     char stupid[1000] = { };
     s_stupid_begin = stupid;
-    s_stupid_end = stupid + sizeof(s_stupid_end);
+    s_stupid_end = stupid + sizeof(stupid);
 
     s_stupid_begin[0] = 1;
     s_stupid_end[-1] = 2;
