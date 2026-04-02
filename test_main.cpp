@@ -190,7 +190,7 @@ main(void)
       assert(val.to_string() == R"("\b\f\n\r\t\u001B\u007F")");
 
       static constexpr unsigned char bytes[] = "\xFF\x00\xFE\x7F\x80";
-      val = ::rocket::cow_bstring(bytes, 5);
+      val = ::asteria::cow_bstring(bytes, 5);
       assert(val.is_binary());
       assert(val.as_binary().size() == 5);
       assert(val.as_binary().compare(bytes, 5) == 0);
@@ -202,7 +202,7 @@ main(void)
     {
       static constexpr unsigned char bytes[] =
           "\xc9\x89\x0d\x33\xa3\x9b\x0e\x85\x88\x33\x44\x7c";
-      ::taxon::Value val = ::rocket::cow_bstring(bytes, 12);
+      ::taxon::Value val = ::asteria::cow_bstring(bytes, 12);
       assert(val.type() == ::taxon::t_binary);
       assert(val.is_binary());
       assert(val.as_binary().size() == 12);
@@ -404,7 +404,7 @@ main(void)
         val = ::std::move(arr);
       }
 
-      ::rocket::cow_string str;
+      ::asteria::cow_string str;
       str.append(N, '[');
       str.append("null", 4);
       str.append(N, ']');

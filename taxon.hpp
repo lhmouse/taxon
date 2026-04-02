@@ -1,16 +1,16 @@
 // This file is part of TAXON.
 // Copyleft 2024-2026, LH_Mouse. All wrongs reserved.
 
-#ifndef TAXON_TAXON_HPP_
-#define TAXON_TAXON_HPP_
+#ifndef TAXON_HPP_
+#define TAXON_HPP_
 
-#include <rocket/cow_string.hpp>
-#include <rocket/cow_vector.hpp>
-#include <rocket/cow_hashmap.hpp>
-#include <rocket/prehashed_string.hpp>
-#include <rocket/variant.hpp>
-#include <rocket/linear_buffer.hpp>
-#include <rocket/tinyfmt.hpp>
+#include <asteria/rocket/cow_string.hpp>
+#include <asteria/rocket/cow_vector.hpp>
+#include <asteria/rocket/cow_hashmap.hpp>
+#include <asteria/rocket/prehashed_string.hpp>
+#include <asteria/rocket/variant.hpp>
+#include <asteria/rocket/linear_buffer.hpp>
+#include <asteria/rocket/tinyfmt.hpp>
 #include <chrono>
 namespace taxon {
 
@@ -39,13 +39,13 @@ using V_null    = nullptr_t;
 using V_boolean = bool;
 using V_integer = int64_t;
 using V_number  = double;
-using V_string  = ::rocket::cow_string;
-using V_binary  = ::rocket::cow_bstring;
+using V_string  = ::asteria::cow_string;
+using V_binary  = ::asteria::cow_bstring;
 using V_time    = ::std::chrono::system_clock::time_point;
 // - aggregate
-using V_array   = ::rocket::cow_vector<Value>;
-using V_object  = ::rocket::cow_hashmap<::rocket::phcow_string,
-                      Value, ::rocket::phcow_string::hash>;
+using V_array   = ::asteria::cow_vector<Value>;
+using V_object  = ::asteria::cow_hashmap<::asteria::phcow_string,
+                      Value, ::asteria::phcow_string::hash>;
 
 // Expand a sequence of alternatives without a trailing comma. This macro is part
 // of the ABI.
@@ -89,7 +89,7 @@ enum Options : uint32_t
     option_allow_trailing_commas = 0b00001000,
   };
 
-ROCKET_DEFINE_ENUM_OPERATORS(Options)
+ASTERIA_DEFINE_ENUM_OPERATORS(Options)
 
 // This structure provides storage for all parser states. Some of these fields are
 // for internal use. This structure need not be initialized before `parse()`.
@@ -113,7 +113,7 @@ struct Parser_Context
 class Value
   {
   private:
-    using variant_type = ::rocket::variant<TAXON_TYPES_IEZUVAH3_(V)>;
+    using variant_type = ::asteria::variant<TAXON_TYPES_IEZUVAH3_(V)>;
     variant_type m_stor;
 
     void
@@ -132,7 +132,7 @@ class Value
       {
         if((this->m_stor.index() == t_array) || (this->m_stor.index() == t_object)) {
           this->do_nonrecursive_destructor();
-          ROCKET_ASSERT(this->m_stor.index() == 0);
+          ASTERIA_ASSERT(this->m_stor.index() == 0);
         }
       }
 
@@ -503,20 +503,20 @@ class Value
 
     // Initialize a character string. The caller shall supply a valid UTF-8 string,
     // but actual validation is deferred to the `print()` function.
-    Value(const ::rocket::cow_string& val)
+    Value(const ::asteria::cow_string& val)
       noexcept
       {
         this->m_stor.emplace<V_string>(val);
       }
 
-    Value(::rocket::shallow_string val)
+    Value(::asteria::shallow_string val)
       noexcept
       {
         this->m_stor.emplace<V_string>(val);
       }
 
     template<typename ycharT, size_t N,
-    ROCKET_ENABLE_IF(::std::is_same<ycharT, char>::value)>
+    ASTERIA_ENABLE_IF(::std::is_same<ycharT, char>::value)>
     Value(const ycharT (*ps)[N])
       noexcept
       {
@@ -573,7 +573,7 @@ class Value
 
     // Set a character string.
     Value&
-    operator=(const ::rocket::cow_string& val)
+    operator=(const ::asteria::cow_string& val)
       & noexcept
       {
         this->open_string() = val;
@@ -581,7 +581,7 @@ class Value
       }
 
     Value&
-    operator=(::rocket::shallow_string val)
+    operator=(::asteria::shallow_string val)
       & noexcept
       {
         this->open_string() = val;
@@ -589,7 +589,7 @@ class Value
       }
 
     template<typename ycharT, size_t N,
-    ROCKET_ENABLE_IF(::std::is_same<ycharT, char>::value)>
+    ASTERIA_ENABLE_IF(::std::is_same<ycharT, char>::value)>
     Value&
     operator=(const ycharT (*ps)[N])
       & noexcept
@@ -599,7 +599,7 @@ class Value
       }
 
     // Initialize a byte string.
-    Value(const ::rocket::cow_bstring& val)
+    Value(const ::asteria::cow_bstring& val)
       noexcept
       {
         this->m_stor.emplace<V_binary>(val);
@@ -655,7 +655,7 @@ class Value
 
     // Set a byte string.
     Value&
-    operator=(const ::rocket::cow_bstring& val)
+    operator=(const ::asteria::cow_bstring& val)
       & noexcept
       {
         this->open_binary() = val;
@@ -711,13 +711,13 @@ class Value
     // object does not have to be initialized. If this function stores an error or
     // or throws an exception, the current value is indeterminate.
     void
-    parse_with(Parser_Context& ctx, ::rocket::tinyfmt& fmt, Options opts = options_default);
+    parse_with(Parser_Context& ctx, ::asteria::tinyfmt& fmt, Options opts = options_default);
 
     void
-    parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts = options_default);
+    parse_with(Parser_Context& ctx, const ::asteria::cow_string& str, Options opts = options_default);
 
     void
-    parse_with(Parser_Context& ctx, const ::rocket::linear_buffer& ln, Options opts = options_default);
+    parse_with(Parser_Context& ctx, const ::asteria::linear_buffer& ln, Options opts = options_default);
 
     void
     parse_with(Parser_Context& ctx, const char* str, size_t len, Options opts = options_default);
@@ -729,13 +729,13 @@ class Value
     parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts = options_default);
 
     bool
-    parse(::rocket::tinyfmt& fmt, Options opts = options_default);
+    parse(::asteria::tinyfmt& fmt, Options opts = options_default);
 
     bool
-    parse(const ::rocket::cow_string& str, Options opts = options_default);
+    parse(const ::asteria::cow_string& str, Options opts = options_default);
 
     bool
-    parse(const ::rocket::linear_buffer& ln, Options opts = options_default);
+    parse(const ::asteria::linear_buffer& ln, Options opts = options_default);
 
     bool
     parse(const char* str, size_t len, Options opts = options_default);
@@ -755,22 +755,22 @@ class Value
     // which should be configured with `setlocale()`. This function produces an ASCII
     // string.
     void
-    print_to(::rocket::tinyfmt& fmt, Options opts = options_default)
+    print_to(::asteria::tinyfmt& fmt, Options opts = options_default)
       const;
 
     void
-    print_to(::rocket::cow_string& str, Options opts = options_default)
+    print_to(::asteria::cow_string& str, Options opts = options_default)
       const;
 
     void
-    print_to(::rocket::linear_buffer& ln, Options opts = options_default)
+    print_to(::asteria::linear_buffer& ln, Options opts = options_default)
       const;
 
     void
     print_to(::std::FILE* fp, Options opts = options_default)
       const;
 
-    ::rocket::cow_string
+    ::asteria::cow_string
     to_string(Options opts = options_default)
       const;
 
@@ -788,8 +788,8 @@ swap(Value& lhs, Value& rhs)
   }
 
 inline
-::rocket::tinyfmt&
-operator<<(::rocket::tinyfmt& fmt, const Value& value)
+::asteria::tinyfmt&
+operator<<(::asteria::tinyfmt& fmt, const Value& value)
   {
     value.print_to(fmt);
     return fmt;
@@ -810,8 +810,8 @@ static_assert(::std::is_nothrow_move_constructible<Value>::value, "");
 static_assert(::std::is_nothrow_move_assignable<Value>::value, "");
 
 }  // namespace taxon
-extern template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
-extern template class ::rocket::cow_vector<::taxon::Value>;
-extern template class ::rocket::cow_hashmap<::rocket::phcow_string,
-    ::taxon::Value, ::rocket::phcow_string::hash>;
+extern template class ::asteria::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
+extern template class ::asteria::cow_vector<::taxon::Value>;
+extern template class ::asteria::cow_hashmap<::asteria::phcow_string,
+    ::taxon::Value, ::asteria::phcow_string::hash>;
 #endif

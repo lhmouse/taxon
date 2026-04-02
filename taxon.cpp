@@ -2,9 +2,9 @@
 // Copyleft 2024-2026, LH_Mouse. All wrongs reserved.
 
 #include "taxon.hpp"
-#include <rocket/tinyfmt.hpp>
-#include <rocket/ascii_numput.hpp>
-#include <rocket/ascii_numget.hpp>
+#include <asteria/rocket/ascii_numput.hpp>
+#include <asteria/rocket/tinyfmt.hpp>
+#include <asteria/rocket/ascii_numget.hpp>
 #include <vector>
 #include <map>
 #include <cmath>
@@ -22,10 +22,10 @@
 #if defined __ARM_NEON
 #include <arm_neon.h>
 #endif
-template class ::rocket::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
-template class ::rocket::cow_vector<::taxon::Value>;
-template class ::rocket::cow_hashmap<::rocket::phcow_string,
-    ::taxon::Value, ::rocket::phcow_string::hash>;
+template class ::asteria::variant<TAXON_TYPES_IEZUVAH3_(::taxon::V)>;
+template class ::asteria::cow_vector<::taxon::Value>;
+template class ::asteria::cow_hashmap<::asteria::phcow_string,
+    ::taxon::Value, ::asteria::phcow_string::hash>;
 namespace taxon {
 namespace {
 
@@ -35,41 +35,41 @@ namespace {
 using simd_word_type = __m256i;
 using simd_mask_type = uint32_t;
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_load(const void* s)
   noexcept
   { return _mm256_loadu_si256(static_cast<const __m256i*>(s));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_bcast(unsigned char c)
   noexcept
   { return _mm256_set1_epi8(static_cast<char>(c));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpeq(simd_word_type x, simd_word_type y)
   noexcept
   { return _mm256_cmpeq_epi8(x, y);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpgt(simd_word_type x, simd_word_type y)
   noexcept
   { return _mm256_cmpgt_epi8(x, y);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_movmask(simd_word_type x)
   noexcept
   { return static_cast<uint32_t>(_mm256_movemask_epi8(x));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return ::rocket::tzcnt32(m);  }
+  { return ::asteria::tzcnt32(m);  }
 
 #elif defined __SSE2__
 
@@ -77,41 +77,41 @@ simd_tzcnt(simd_mask_type m)
 using simd_word_type = __m128i;
 using simd_mask_type = uint32_t;
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_load(const void* s)
   noexcept
   { return _mm_loadu_si128(static_cast<const __m128i*>(s));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_bcast(unsigned char c)
   noexcept
   { return _mm_set1_epi8(static_cast<char>(c));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpeq(simd_word_type x, simd_word_type y)
   noexcept
   { return _mm_cmpeq_epi8(x, y);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpgt(simd_word_type x, simd_word_type y)
   noexcept
   { return _mm_cmplt_epi8(y, x);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_movmask(simd_word_type x)
   noexcept
   { return static_cast<uint32_t>(_mm_movemask_epi8(x));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return ::rocket::tzcnt32(0x10000 | m);  }
+  { return ::asteria::tzcnt32(0x10000 | m);  }
 
 #elif defined __ARM_NEON
 
@@ -119,45 +119,45 @@ simd_tzcnt(simd_mask_type m)
 using simd_word_type = uint8x16_t;
 using simd_mask_type = uint64_t;
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_load(const void* s)
   noexcept
   { return vld1q_u8(static_cast<const uint8_t*>(s));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_bcast(unsigned char c)
   noexcept
   { return vdupq_n_u8(static_cast<char>(c));  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpeq(simd_word_type x, simd_word_type y)
   noexcept
   { return vceqq_u8(x, y);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_word_type
 simd_cmpgt(simd_word_type x, simd_word_type y)
   noexcept
   { return vcltq_u8(x, y);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_movmask(simd_word_type x)
   noexcept
   { return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(x), 4)), 0);  }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 simd_mask_type
 simd_tzcnt(simd_mask_type m)
   noexcept
-  { return ::rocket::tzcnt64(m) >> 2;  }
+  { return ::asteria::tzcnt64(m) >> 2;  }
 
 #endif  // SIMD
 
-constexpr ROCKET_ALWAYS_INLINE
+constexpr ASTERIA_ALWAYS_INLINE
 bool
 is_within(int c, int lo, int hi)
   {
@@ -165,14 +165,14 @@ is_within(int c, int lo, int hi)
   }
 
 template<typename... Ts>
-constexpr ROCKET_ALWAYS_INLINE
+constexpr ASTERIA_ALWAYS_INLINE
 bool
 is_any(int c, Ts... accept_set)
   {
     return (... || (c == accept_set));
   }
 
-ROCKET_ALWAYS_INLINE
+ASTERIA_ALWAYS_INLINE
 void
 do_err(Parser_Context& ctx, const char* error)
   {
@@ -234,11 +234,11 @@ struct Memory_Source
 
 struct Unified_Source
   {
-    ::rocket::tinyfmt* fmt = nullptr;
+    ::asteria::tinyfmt* fmt = nullptr;
     Memory_Source* mem = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Source(::rocket::tinyfmt* b)
+    Unified_Source(::asteria::tinyfmt* b)
       noexcept
       : fmt(b)  { }
 
@@ -289,20 +289,20 @@ struct Unified_Source
 
 struct Unified_Sink
   {
-    ::rocket::tinyfmt* fmt = nullptr;
-    ::rocket::cow_string* str = nullptr;
-    ::rocket::linear_buffer* ln = nullptr;
+    ::asteria::tinyfmt* fmt = nullptr;
+    ::asteria::cow_string* str = nullptr;
+    ::asteria::linear_buffer* ln = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Sink(::rocket::tinyfmt* b)
+    Unified_Sink(::asteria::tinyfmt* b)
       noexcept
       : fmt(b)  { }
 
-    Unified_Sink(::rocket::cow_string* s)
+    Unified_Sink(::asteria::cow_string* s)
       noexcept
       : str(s)  { }
 
-    Unified_Sink(::rocket::linear_buffer* l)
+    Unified_Sink(::asteria::linear_buffer* l)
       noexcept
       : ln(l)  { }
 
@@ -339,21 +339,21 @@ struct Unified_Sink
       }
   };
 
-ROCKET_FLATTEN
-const ::rocket::phcow_string&
-do_intern_string(::std::multimap<size_t, ::rocket::phcow_string>& pool, const char* str, size_t len)
+ASTERIA_FLATTEN
+const ::asteria::phcow_string&
+do_intern_string(::std::multimap<size_t, ::asteria::phcow_string>& pool, const char* str, size_t len)
   {
-    size_t hval = ::rocket::phcow_string::hasher()(str, len);
+    size_t hval = ::asteria::phcow_string::hasher()(str, len);
     auto range = pool.equal_range(hval);
 
     // String already exists?
     for(auto it = range.first;  it != range.second;  ++it)
-      if((it->second.size() == len) && ::rocket::xmemeq(it->second.data(), str, len))
+      if((it->second.size() == len) && ::asteria::xmemeq(it->second.data(), str, len))
         return it->second;
 
     // No. Allocate a new one, while keeping the pool sorted.
-    auto it = pool.emplace(hval, ::rocket::cow_string(str, len));
-    ROCKET_ASSERT(it->second.rdhash() == hval);
+    auto it = pool.emplace(hval, ::asteria::cow_string(str, len));
+    ASTERIA_ASSERT(it->second.rdhash() == hval);
     return it->second;
   }
 
@@ -368,9 +368,9 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
 
     if(is_within(ctx.c, 0x80, 0xBF))
       return do_err(ctx, "Invalid UTF-8 byte");
-    else if(ROCKET_UNEXPECT(ctx.c > 0x7F)) {
+    else if(ASTERIA_UNEXPECT(ctx.c > 0x7F)) {
       // Parse a multibyte Unicode character.
-      uint32_t u8len = ::rocket::lzcnt32((static_cast<uint32_t>(ctx.c) << 24) ^ UINT32_MAX);
+      uint32_t u8len = ::asteria::lzcnt32((static_cast<uint32_t>(ctx.c) << 24) ^ UINT32_MAX);
       ctx.c &= (1 << (7 - u8len)) - 1;
 
       char tbytes[4];
@@ -395,9 +395,9 @@ do_load_next(Parser_Context& ctx, const Unified_Source& usrc)
     }
   }
 
-ROCKET_FLATTEN
+ASTERIA_FLATTEN
 void
-do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
+do_token(::asteria::cow_string& token, Parser_Context& ctx, const Unified_Source& usrc)
   {
     // Clear the current token and skip whitespace.
     ctx.error = nullptr;
@@ -485,7 +485,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
 
         // If the end of input has been reached, `ctx.error` may be set. We will
         // not return an error, so clear it.
-        ROCKET_ASSERT(token.size() != 0);
+        ASTERIA_ASSERT(token.size() != 0);
         ctx.error = nullptr;
         ctx.eof = false;
         break;
@@ -539,7 +539,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
 
         // If the end of input has been reached, `ctx.error` may be set. We will
         // not return an error, so clear it.
-        ROCKET_ASSERT(token.size() != 0);
+        ASTERIA_ASSERT(token.size() != 0);
         ctx.error = nullptr;
         ctx.eof = false;
         break;
@@ -594,7 +594,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
           else if(ctx.c == '\"')
             break;
 
-          if(ROCKET_UNEXPECT(ctx.c == '\\')) {
+          if(ASTERIA_UNEXPECT(ctx.c == '\\')) {
             // Read an escape sequence.
             int next = usrc.getc();
             if(next < 0) {
@@ -691,7 +691,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
           }
 
           // Move the unescaped character into the token.
-          if(ROCKET_EXPECT(ctx.c <= 0x7F))
+          if(ASTERIA_EXPECT(ctx.c <= 0x7F))
             token.push_back(static_cast<char>(ctx.c));
           else {
             char mbs[MB_LEN_MAX];
@@ -700,7 +700,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
             if(static_cast<int>(mblen) < 0)
               return do_err(ctx, "Character not representable in current locale");
 
-            ROCKET_ASSERT(mblen != 0);
+            ASTERIA_ASSERT(mblen != 0);
             token.append(mbs, mblen);
           }
         }
@@ -708,7 +708,7 @@ do_token(::rocket::cow_string& token, Parser_Context& ctx, const Unified_Source&
         // Drop the terminating quotation mark for simplicity; do not attempt to
         // get the next character, as the stream may be blocking but we can't
         // really know whether there are more data.
-        ROCKET_ASSERT(token.size() != 0);
+        ASTERIA_ASSERT(token.size() != 0);
         ctx.error = nullptr;
         ctx.c = -1;
         break;
@@ -735,9 +735,9 @@ do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Opti
       };
 
     ::std::vector<xFrame> stack;
-    ::rocket::cow_string token;
-    ::rocket::ascii_numget numg;
-    ::std::multimap<size_t, ::rocket::phcow_string> key_pool;
+    ::asteria::cow_string token;
+    ::asteria::ascii_numget numg;
+    ::std::multimap<size_t, ::asteria::phcow_string> key_pool;
     Value* pstor = &root;
 
     do_token(token, ctx, usrc);
@@ -793,7 +793,7 @@ do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Opti
           return do_err(ctx, "Missing key string");
 
         auto emr = frm.pso->try_emplace(do_intern_string(key_pool, token.data() + 1, token.size() - 1));
-        ROCKET_ASSERT(emr.second);
+        ASTERIA_ASSERT(emr.second);
 
         do_token(token, ctx, usrc);
         if(token[0] != ':')
@@ -816,7 +816,7 @@ do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Opti
     else if(is_any(token[0], '+', '-') || is_within(token[0], '0', '9')) {
       // number
       size_t n = numg.parse_DD(token.data(), token.size());
-      ROCKET_ASSERT(n == token.size());
+      ASTERIA_ASSERT(n == token.size());
       numg.cast_D(pstor->open_number(), -DBL_MAX, DBL_MAX);
       if(numg.overflowed())
         return do_err(ctx, "Number out of range");
@@ -930,7 +930,7 @@ do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Opti
           }
 
           uint8_t piece[4];
-          ::rocket::store_be<uint32_t>(piece, value << 8);
+          ::asteria::store_be<uint32_t>(piece, value << 8);
           bin.append(piece, out_bytes);
           bptr += 4;
         }
@@ -1025,9 +1025,9 @@ do_parse_with(Value& root, Parser_Context& ctx, const Unified_Source& usrc, Opti
     }
   }
 
-ROCKET_FLATTEN
+ASTERIA_FLATTEN
 void
-do_escape_string_utf16(const Unified_Sink& usink, const ::rocket::cow_string& str)
+do_escape_string_utf16(const Unified_Sink& usink, const ::asteria::cow_string& str)
   {
     auto bptr = str.data();
     const auto eptr = str.data() + str.size();
@@ -1159,7 +1159,7 @@ do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
       };
 
     ::std::vector<xFrame> stack;
-    ::rocket::ascii_numput nump;
+    ::asteria::ascii_numput nump;
     const Value* pstor = &root;
 
   do_unpack_loop_:
@@ -1286,7 +1286,7 @@ do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
             while(eptr - bptr >= 8) {
               // 8-byte group
               char hex_word[16];
-              uint64_t word = ::rocket::load_be<uint64_t>(bptr);
+              uint64_t word = ::asteria::load_be<uint64_t>(bptr);
               bptr += 8;
 
               for(uint32_t t = 0;  t != 16;  ++t) {
@@ -1337,7 +1337,7 @@ do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
             while(eptr - bptr >= 3) {
               // 3-byte group
               char b64_word[4];
-              uint32_t word = ::rocket::load_be<uint32_t>(bptr);  // use the null terminator!
+              uint32_t word = ::asteria::load_be<uint32_t>(bptr);  // use the null terminator!
               bptr += 3;
 
               for(uint32_t t = 0;  t != 4;  ++t) {
@@ -1352,7 +1352,7 @@ do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
               // 1-byte or 2-byte group
               size_t nrem = static_cast<size_t>(eptr - bptr);
               char b64_word[4] = { 0, 0, '=', '=' };
-              uint32_t word = ::rocket::load_be<uint16_t>(bptr);  // use the null terminator!
+              uint32_t word = ::asteria::load_be<uint16_t>(bptr);  // use the null terminator!
               bptr += nrem;
 
               for(uint32_t t = 0;  t != nrem + 1;  ++t) {
@@ -1383,7 +1383,7 @@ do_print_to(const Unified_Sink& usink, const Value& root, Options opts)
         break;
 
       default:
-        ::rocket::sprintf_and_throw<::std::invalid_argument>(
+        ::asteria::sprintf_and_throw<::std::invalid_argument>(
               "taxon::Value: unknown type enumeration `%d`", pstor->type());
       }
 
@@ -1432,7 +1432,7 @@ Value::
 do_nonrecursive_destructor()
   noexcept
   {
-#ifdef ROCKET_DEBUG
+#ifdef ASTERIA_DEBUG
     // Attempt to run out of stack in a rather stupid way.
     static char* volatile s_stupid_begin;
     static char* volatile s_stupid_end;
@@ -1475,7 +1475,7 @@ do_nonrecursive_destructor()
         break;
       }
 
-    ::rocket::destroy(&(this->m_stor));
+    ::asteria::destroy(&(this->m_stor));
     reinterpret_cast<bytes_type&>(this->m_stor) = bytes_type();
 
     if(!stack.empty()) {
@@ -1487,14 +1487,14 @@ do_nonrecursive_destructor()
 
 void
 Value::
-parse_with(Parser_Context& ctx, ::rocket::tinyfmt& fmt, Options opts)
+parse_with(Parser_Context& ctx, ::asteria::tinyfmt& fmt, Options opts)
   {
     do_parse_with(*this, ctx, &fmt, opts);
   }
 
 void
 Value::
-parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
+parse_with(Parser_Context& ctx, const ::asteria::cow_string& str, Options opts)
   {
     Memory_Source msrc(str.data(), str.size());
     do_parse_with(*this, ctx, &msrc, opts);
@@ -1502,7 +1502,7 @@ parse_with(Parser_Context& ctx, const ::rocket::cow_string& str, Options opts)
 
 void
 Value::
-parse_with(Parser_Context& ctx, const ::rocket::linear_buffer& ln, Options opts)
+parse_with(Parser_Context& ctx, const ::asteria::linear_buffer& ln, Options opts)
   {
     Memory_Source msrc(ln.data(), ln.size());
     do_parse_with(*this, ctx, &msrc, opts);
@@ -1533,7 +1533,7 @@ parse_with(Parser_Context& ctx, ::std::FILE* fp, Options opts)
 
 bool
 Value::
-parse(::rocket::tinyfmt& fmt, Options opts)
+parse(::asteria::tinyfmt& fmt, Options opts)
   {
     Parser_Context ctx;
     do_parse_with(*this, ctx, &fmt, opts);
@@ -1542,7 +1542,7 @@ parse(::rocket::tinyfmt& fmt, Options opts)
 
 bool
 Value::
-parse(const ::rocket::cow_string& str, Options opts)
+parse(const ::asteria::cow_string& str, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(str.data(), str.size());
@@ -1552,7 +1552,7 @@ parse(const ::rocket::cow_string& str, Options opts)
 
 bool
 Value::
-parse(const ::rocket::linear_buffer& ln, Options opts)
+parse(const ::asteria::linear_buffer& ln, Options opts)
   {
     Parser_Context ctx;
     Memory_Source msrc(ln.data(), ln.size());
@@ -1591,7 +1591,7 @@ parse(::std::FILE* fp, Options opts)
 
 void
 Value::
-print_to(::rocket::tinyfmt& fmt, Options opts)
+print_to(::asteria::tinyfmt& fmt, Options opts)
   const
   {
     do_print_to(&fmt, *this, opts);
@@ -1599,7 +1599,7 @@ print_to(::rocket::tinyfmt& fmt, Options opts)
 
 void
 Value::
-print_to(::rocket::cow_string& str, Options opts)
+print_to(::asteria::cow_string& str, Options opts)
   const
   {
     do_print_to(&str, *this, opts);
@@ -1607,7 +1607,7 @@ print_to(::rocket::cow_string& str, Options opts)
 
 void
 Value::
-print_to(::rocket::linear_buffer& ln, Options opts)
+print_to(::asteria::linear_buffer& ln, Options opts)
   const
   {
     do_print_to(&ln, *this, opts);
@@ -1621,12 +1621,12 @@ print_to(::std::FILE* fp, Options opts)
     do_print_to(fp, *this, opts);
   }
 
-::rocket::cow_string
+::asteria::cow_string
 Value::
 to_string(Options opts)
   const
   {
-    ::rocket::cow_string str;
+    ::asteria::cow_string str;
     do_print_to(&str, *this, opts);
     return str;
   }
