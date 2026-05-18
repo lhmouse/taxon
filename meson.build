@@ -23,11 +23,6 @@ project('taxon',
 # Global configuration
 #===========================================================
 
-ver = configuration_data()
-ver.set('abi_major', meson.project_version().split('.')[0])
-ver.set('abi_minor', meson.project_version().split('.')[1])
-ver.set_quoted('abi_string', meson.project_version())
-
 cxx = meson.get_compiler('cpp')
 cxx_is_i386 = cxx.has_define('__i386__')
 cxx_is_amd64 = cxx.has_define('__amd64__')
@@ -66,15 +61,19 @@ endif
 # Build rules
 #===========================================================
 
-dep_asteria = dependency('asteria')
+ver = { 'abi_major': meson.project_version().split('.')[0],
+        'abi_minor': meson.project_version().split('.')[1],
+        'abi_string': meson.project_version().join([ '"', '"' ]) }
 
 install_headers('taxon.hpp')
+
+dep_asteria = dependency('asteria')
 
 lib_taxon = both_libraries('taxon',
       sources: [ 'taxon.cpp' ],
       dependencies: [ dep_asteria ],
-      soversion: ver.get('abi_major'),
-      version: '.'.join(ver.get('abi_major'), ver.get('abi_minor'), '0'),
+      soversion: ver['abi_major'],
+      version: '.'.join([ ver['abi_major'], ver['abi_minor'], '0' ]),
       install: true)
 
 import('pkgconfig').generate(lib_taxon,
