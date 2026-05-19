@@ -63,7 +63,7 @@ endif
 
 ver = { 'abi_major': meson.project_version().split('.')[0],
         'abi_minor': meson.project_version().split('.')[1],
-        'abi_string': meson.project_version().join([ '"', '"' ]) }
+        'abi_string': meson.project_version() }
 
 install_headers('taxon.hpp')
 
