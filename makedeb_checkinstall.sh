@@ -10,6 +10,7 @@ meson test -C build_makedeb
 
 sudo checkinstall  \
   --pkgname="taxon-local"  \
+  --provides="libtaxon-dev"  \
   --pkgversion="$(git describe --tags | sed 's/^[^0-9]*//')"  \
   --pkgsource="https://github.com/lhmouse/taxon"  \
   --pkglicense="BSD-3-Clause"  \
