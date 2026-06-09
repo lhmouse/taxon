@@ -1,6 +1,10 @@
 #!/bin/bash -e
 
-meson setup -Ddebug=true -Doptimization=3 build_makedeb
+meson setup  \
+  -Ddebug=true -Doptimization=3  \
+  --prefix="/usr/local"  \
+  build_makedeb
+
 meson compile -C build_makedeb
 meson test -C build_makedeb
 
@@ -13,5 +17,4 @@ sudo checkinstall  \
   --pkgarch="$(dpkg --print-architecture)"  \
   --default --nodoc --backup=no --fstrans=yes --strip --stripso  \
   --install=yes  \
-  --  \
   meson install -C build_makedeb
