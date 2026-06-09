@@ -8,6 +8,8 @@ meson setup  \
 meson compile -C build_makedeb
 meson test -C build_makedeb
 
+echo 'Type Annotation eXtension for JSON' >description-pak
+
 sudo checkinstall  \
   --pkgname="taxon-local"  \
   --provides="libtaxon-dev"  \
@@ -16,5 +18,5 @@ sudo checkinstall  \
   --pkglicense="BSD-3-Clause"  \
   --pkggroup="devel"  \
   --pkgarch="$(dpkg --print-architecture)"  \
-  --nodoc --backup=no --default --fstrans=no --install=yes  \
+  --nodoc --backup=no --default --fstrans=no --install=yes --deldesc  \
   meson install -C build_makedeb
