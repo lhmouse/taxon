@@ -6,5 +6,5 @@
 *.deb
 *.log
 /build_*
-/profiling/*
+/description-pak
 /asteria
