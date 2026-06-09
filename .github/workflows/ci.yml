@@ -41,6 +41,7 @@ jobs:
         run: >-
              git submodule update --init
              && (cd asteria && ./makedeb_checkinstall.sh)
+             && sudo ldconfig
 
       - name: Configure
         run: >-
