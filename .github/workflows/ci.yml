@@ -34,14 +34,13 @@ jobs:
         run: >-
              sudo apt-get update ;
              sudo apt-get install -y --no-install-recommends g++-10 meson
-             ninja-build checkinstall python3 python3-pip pkgconf zlib1g-dev uuid-dev
+             ninja-build python3 python3-pip pkgconf zlib1g-dev uuid-dev
              lib{edit,pcre2,ssl,unwind,mysqlclient,mongoc,hiredis}-dev
 
       - name: Build and install submodules
         run: >-
              git submodule update --init
-             && (cd asteria && ./makedeb_checkinstall.sh)
-             && sudo ldconfig
+             && (cd asteria && ./makedeb.sh && sudo dpkg -i *.deb)
 
       - name: Configure
         run: >-
@@ -68,13 +67,13 @@ jobs:
         run: >-
              sudo apt-get update ;
              sudo apt-get install -y --no-install-recommends g++-10 meson
-             ninja-build checkinstall python3 python3-pip pkgconf zlib1g-dev uuid-dev
+             ninja-build python3 python3-pip pkgconf zlib1g-dev uuid-dev
              lib{edit,pcre2,ssl,unwind,mysqlclient,mongoc,hiredis}-dev
 
       - name: Build and install submodules
         run: >-
              git submodule update --init
-             && (cd asteria && ./makedeb_checkinstall.sh)
+             && (cd asteria && ./makedeb.sh && sudo dpkg -i *.deb)
 
       - name: Configure
         run: >-
@@ -102,13 +101,13 @@ jobs:
         run: >-
              sudo apt-get update ;
              sudo apt-get install -y --no-install-recommends g++-10 meson
-             ninja-build checkinstall python3 python3-pip pkgconf zlib1g-dev uuid-dev
+             ninja-build python3 python3-pip pkgconf zlib1g-dev uuid-dev
              lib{edit,pcre2,ssl,unwind,mysqlclient,mongoc,hiredis}-dev
 
       - name: Build and install submodules
         run: >-
              git submodule update --init
-             && (cd asteria && ./makedeb_checkinstall.sh)
+             && (cd asteria && ./makedeb.sh && sudo dpkg -i *.deb)
 
       - name: Configure
         run: >-
