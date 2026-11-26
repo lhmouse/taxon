@@ -37,38 +37,32 @@ using simd_mask_type = uint32_t;
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_load(const void* s)
-  noexcept
+simd_load(const void* s) noexcept
   { return _mm256_loadu_si256(static_cast<const __m256i*>(s));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_bcast(unsigned char c)
-  noexcept
+simd_bcast(unsigned char c) noexcept
   { return _mm256_set1_epi8(static_cast<char>(c));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpeq(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpeq(simd_word_type x, simd_word_type y) noexcept
   { return _mm256_cmpeq_epi8(x, y);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpgt(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpgt(simd_word_type x, simd_word_type y) noexcept
   { return _mm256_cmpgt_epi8(x, y);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_movmask(simd_word_type x)
-  noexcept
+simd_movmask(simd_word_type x) noexcept
   { return static_cast<uint32_t>(_mm256_movemask_epi8(x));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_tzcnt(simd_mask_type m)
-  noexcept
+simd_tzcnt(simd_mask_type m) noexcept
   { return ::asteria::tzcnt32(m);  }
 
 #elif defined __SSE2__
@@ -79,38 +73,32 @@ using simd_mask_type = uint32_t;
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_load(const void* s)
-  noexcept
+simd_load(const void* s) noexcept
   { return _mm_loadu_si128(static_cast<const __m128i*>(s));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_bcast(unsigned char c)
-  noexcept
+simd_bcast(unsigned char c) noexcept
   { return _mm_set1_epi8(static_cast<char>(c));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpeq(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpeq(simd_word_type x, simd_word_type y) noexcept
   { return _mm_cmpeq_epi8(x, y);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpgt(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpgt(simd_word_type x, simd_word_type y) noexcept
   { return _mm_cmplt_epi8(y, x);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_movmask(simd_word_type x)
-  noexcept
+simd_movmask(simd_word_type x) noexcept
   { return static_cast<uint32_t>(_mm_movemask_epi8(x));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_tzcnt(simd_mask_type m)
-  noexcept
+simd_tzcnt(simd_mask_type m) noexcept
   { return ::asteria::tzcnt32(0x10000 | m);  }
 
 #elif defined __ARM_NEON
@@ -121,38 +109,32 @@ using simd_mask_type = uint64_t;
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_load(const void* s)
-  noexcept
+simd_load(const void* s) noexcept
   { return vld1q_u8(static_cast<const uint8_t*>(s));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_bcast(unsigned char c)
-  noexcept
+simd_bcast(unsigned char c) noexcept
   { return vdupq_n_u8(static_cast<char>(c));  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpeq(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpeq(simd_word_type x, simd_word_type y) noexcept
   { return vceqq_u8(x, y);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_word_type
-simd_cmpgt(simd_word_type x, simd_word_type y)
-  noexcept
+simd_cmpgt(simd_word_type x, simd_word_type y) noexcept
   { return vcltq_u8(x, y);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_movmask(simd_word_type x)
-  noexcept
+simd_movmask(simd_word_type x) noexcept
   { return vget_lane_u64(vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(x), 4)), 0);  }
 
 ASTERIA_ALWAYS_INLINE
 simd_mask_type
-simd_tzcnt(simd_mask_type m)
-  noexcept
+simd_tzcnt(simd_mask_type m) noexcept
   { return ::asteria::tzcnt64(m) >> 2;  }
 
 #endif  // SIMD
@@ -191,18 +173,19 @@ struct Memory_Source
     const char* eptr;
 
     constexpr
-    Memory_Source()
-      noexcept
-      : bptr(), sptr(), eptr()  { }
+    Memory_Source() noexcept
+      :
+        bptr(), sptr(), eptr()
+      { }
 
     constexpr
-    Memory_Source(const char* s, size_t n)
-      noexcept
-      : bptr(s), sptr(s), eptr(s + n)  { }
+    Memory_Source(const char* s, size_t n) noexcept
+      :
+        bptr(s), sptr(s), eptr(s + n)
+      { }
 
     int
-    getc()
-      noexcept
+    getc() noexcept
       {
         int r = -1;
         if(this->sptr != this->eptr) {
@@ -213,8 +196,7 @@ struct Memory_Source
       }
 
     size_t
-    getn(char* s, size_t n)
-      noexcept
+    getn(char* s, size_t n) noexcept
       {
         size_t r = ::std::min(static_cast<size_t>(this->eptr - this->sptr), n);
         if(r != 0) {
@@ -225,8 +207,7 @@ struct Memory_Source
       }
 
     int64_t
-    tell()
-      const noexcept
+    tell() const noexcept
       {
         return this->sptr - this->bptr;
       }
@@ -238,21 +219,23 @@ struct Unified_Source
     Memory_Source* mem = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Source(::asteria::tinyfmt* b)
-      noexcept
-      : fmt(b)  { }
+    Unified_Source(::asteria::tinyfmt* b) noexcept
+      :
+        fmt(b)
+      { }
 
-    Unified_Source(Memory_Source* m)
-      noexcept
-      : mem(m)  { }
+    Unified_Source(Memory_Source* m) noexcept
+      :
+        mem(m)
+      { }
 
-    Unified_Source(::std::FILE* f)
-      noexcept
-      : fp(f)  { }
+    Unified_Source(::std::FILE* f) noexcept
+      :
+        fp(f)
+      { }
 
     int
-    getc()
-      const
+    getc() const
       {
         if(this->mem)
           return this->mem->getc();
@@ -263,8 +246,7 @@ struct Unified_Source
       }
 
     size_t
-    getn(char* s, size_t n)
-      const
+    getn(char* s, size_t n) const
       {
         if(this->mem)
           return this->mem->getn(s, n);
@@ -275,8 +257,7 @@ struct Unified_Source
       }
 
     int64_t
-    tell()
-      const
+    tell() const
       {
         if(this->mem)
           return this->mem->tell();
@@ -294,25 +275,28 @@ struct Unified_Sink
     ::asteria::linear_buffer* ln = nullptr;
     ::std::FILE* fp = nullptr;
 
-    Unified_Sink(::asteria::tinyfmt* b)
-      noexcept
-      : fmt(b)  { }
+    Unified_Sink(::asteria::tinyfmt* b) noexcept
+      :
+        fmt(b)
+      { }
 
-    Unified_Sink(::asteria::cow_string* s)
-      noexcept
-      : str(s)  { }
+    Unified_Sink(::asteria::cow_string* s) noexcept
+      :
+        str(s)
+      { }
 
-    Unified_Sink(::asteria::linear_buffer* l)
-      noexcept
-      : ln(l)  { }
+    Unified_Sink(::asteria::linear_buffer* l) noexcept
+      :
+        ln(l)
+      { }
 
-    Unified_Sink(::std::FILE* f)
-      noexcept
-      : fp(f)  { }
+    Unified_Sink(::std::FILE* f) noexcept
+      :
+        fp(f)
+      { }
 
     void
-    putc(char c)
-      const
+    putc(char c) const
       {
         if(this->str)
           this->str->push_back(c);
@@ -325,8 +309,7 @@ struct Unified_Sink
       }
 
     void
-    putn(const char* s, size_t n)
-      const
+    putn(const char* s, size_t n) const
       {
         if(this->str)
           this->str->append(s, n);
@@ -1429,8 +1412,7 @@ alignas(Value) const char null_storage[sizeof(Value)] = { };
 
 void
 Value::
-do_nonrecursive_destructor()
-  noexcept
+do_nonrecursive_destructor() noexcept
   {
 #ifdef ASTERIA_DEBUG
     // Attempt to run out of stack in a rather stupid way.
@@ -1591,40 +1573,35 @@ parse(::std::FILE* fp, Options opts)
 
 void
 Value::
-print_to(::asteria::tinyfmt& fmt, Options opts)
-  const
+print_to(::asteria::tinyfmt& fmt, Options opts) const
   {
     do_print_to(&fmt, *this, opts);
   }
 
 void
 Value::
-print_to(::asteria::cow_string& str, Options opts)
-  const
+print_to(::asteria::cow_string& str, Options opts) const
   {
     do_print_to(&str, *this, opts);
   }
 
 void
 Value::
-print_to(::asteria::linear_buffer& ln, Options opts)
-  const
+print_to(::asteria::linear_buffer& ln, Options opts) const
   {
     do_print_to(&ln, *this, opts);
   }
 
 void
 Value::
-print_to(::std::FILE* fp, Options opts)
-  const
+print_to(::std::FILE* fp, Options opts) const
   {
     do_print_to(fp, *this, opts);
   }
 
 ::asteria::cow_string
 Value::
-to_string(Options opts)
-  const
+to_string(Options opts) const
   {
     ::asteria::cow_string str;
     do_print_to(&str, *this, opts);
@@ -1633,8 +1610,7 @@ to_string(Options opts)
 
 void
 Value::
-print_to_stderr(Options opts)
-  const
+print_to_stderr(Options opts) const
   {
     do_print_to(stderr, *this, opts);
   }

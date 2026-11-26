@@ -117,14 +117,13 @@ class Value
     variant_type m_stor;
 
     void
-    do_nonrecursive_destructor()
-      noexcept;
+    do_nonrecursive_destructor() noexcept;
 
   public:
     // Initializes a null value.
     constexpr
-    Value(V_null = nullptr)
-      noexcept  { }
+    Value(V_null = nullptr) noexcept
+      { }
 
     // Destroys this value. The destructor shall take care of a deep recursion, to
     // avoid running out of the system stack.
@@ -139,14 +138,12 @@ class Value
     // Gets the type of the stored value.
     constexpr
     Type
-    type()
-      const noexcept
+    type() const noexcept
       { return static_cast<Type>(this->m_stor.index());  }
 
     // Swaps two values in a smart way.
     Value&
-    swap(Value& other)
-      noexcept
+    swap(Value& other) noexcept
       {
         this->m_stor.swap(other.m_stor);
         return *this;
@@ -154,67 +151,57 @@ class Value
 
     // Checks whether the stored value is null.
     bool
-    is_null()
-      const noexcept
+    is_null() const noexcept
       { return this->m_stor.index() == t_null;  }
 
     // Sets a null value.
     void
-    clear()
-      noexcept
+    clear() noexcept
       { this->m_stor.emplace<V_null>();  }
 
     // Sets a null value.
     Value&
-    operator=(V_null)
-      & noexcept
+    operator=(V_null) & noexcept
       {
         this->clear();
         return *this;
       }
 
     // Initializes an array.
-    Value(const V_array& val)
-      noexcept
+    Value(const V_array& val) noexcept
       {
         this->m_stor.emplace<V_array>(val);
       }
 
     // Checks whether the stored value is an array.
     bool
-    is_array()
-      const noexcept
+    is_array() const noexcept
       { return this->m_stor.index() == t_array;  }
 
     // Gets an array. If the stored value is not an array, an exception is thrown,
     // and there is no effect.
     const V_array&
-    as_array()
-      const
+    as_array() const
       { return this->m_stor.as<V_array>();  }
 
     // Get a read-only range of an array.
     V_array::const_iterator
-    as_array_begin()
-      const
+    as_array_begin() const
       { return this->as_array().begin();  }
 
     V_array::const_iterator
-    as_array_end()
-      const
+    as_array_end() const
       { return this->as_array().end();  }
 
     size_t
-    as_array_size()
-      const
+    as_array_size() const
       { return this->as_array().size();  }
 
     // Gets or creates an array (list). If the stored value is not an array, it is
     // overwritten with an empty array, and a reference to the new value is
     // returned.
     V_array&
-    open_array()
-      noexcept
+    open_array() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_array>())
           return *ptr;
@@ -224,71 +211,60 @@ class Value
 
     // Get a mutable range of an array.
     V_array::iterator
-    open_array_begin()
-      noexcept
+    open_array_begin() noexcept
       { return this->open_array().mut_begin();  }
 
     V_array::iterator
-    open_array_end()
-      noexcept
+    open_array_end() noexcept
       { return this->open_array().mut_end();  }
 
     size_t
-    open_array_size()
-      noexcept
+    open_array_size() noexcept
       { return this->open_array().size();  }
 
     // Sets an array.
     Value&
-    operator=(const V_array& val)
-      & noexcept
+    operator=(const V_array& val) & noexcept
       {
         this->open_array() = val;
         return *this;
       }
 
     // Initializes an object.
-    Value(const V_object& val)
-      noexcept
+    Value(const V_object& val) noexcept
       {
         this->m_stor.emplace<V_object>(val);
       }
 
     // Checks whether the stored value is an object.
     bool
-    is_object()
-      const noexcept
+    is_object() const noexcept
       { return this->m_stor.index() == t_object;  }
 
     // Gets an object. If the stored value is not an object, an exception is thrown,
     // and there is no effect.
     const V_object&
-    as_object()
-      const
+    as_object() const
       { return this->m_stor.as<V_object>();  }
 
     // Get a read-only range of an object.
     V_object::const_iterator
-    as_object_begin()
-      const
+    as_object_begin() const
       { return this->as_object().begin();  }
 
     V_object::const_iterator
-    as_object_end()
-      const
+    as_object_end() const
       { return this->as_object().end();  }
 
     size_t
-    as_object_size()
-      const
+    as_object_size() const
       { return this->as_object().size();  }
 
     // Gets or creates an object (dictionary). If the stored value is not an object,
     // it is overwritten with an empty object, and a reference to the new value is
     // returned.
     V_object&
-    open_object()
-      noexcept
+    open_object() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_object>())
           return *ptr;
@@ -298,55 +274,47 @@ class Value
 
     // Get a mutable range of an object.
     V_object::iterator
-    open_object_begin()
-      noexcept
+    open_object_begin() noexcept
       { return this->open_object().mut_begin();  }
 
     V_object::iterator
-    open_object_end()
-      noexcept
+    open_object_end() noexcept
       { return this->open_object().mut_end();  }
 
     size_t
-    open_object_size()
-      noexcept
+    open_object_size() noexcept
       { return this->open_object().size();  }
 
     // Sets an object.
     Value&
-    operator=(const V_object& val)
-      & noexcept
+    operator=(const V_object& val) & noexcept
       {
         this->open_object() = val;
         return *this;
       }
 
     // Initializes a boolean value.
-    Value(bool val)
-      noexcept
+    Value(bool val) noexcept
       {
         this->m_stor.emplace<V_boolean>(val);
       }
 
     // Checks whether the stored value is a boolean value.
     bool
-    is_boolean()
-      const noexcept
+    is_boolean() const noexcept
       { return this->m_stor.index() == t_boolean;  }
 
     // Gets a boolean value. If the stored value is not a boolean value, an exception
     // is thrown, and there is no effect.
     V_boolean
-    as_boolean()
-      const
+    as_boolean() const
       { return this->m_stor.as<V_boolean>();  }
 
     // Gets or creates a boolean value. If the stored value is not a boolean
     // value, it is overwritten with `false`, and a reference to the new value is
     // returned.
     V_boolean&
-    open_boolean()
-      noexcept
+    open_boolean() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_boolean>())
           return *ptr;
@@ -356,8 +324,7 @@ class Value
 
     // Sets a boolean value.
     Value&
-    operator=(bool val)
-      & noexcept
+    operator=(bool val) & noexcept
       {
         this->open_boolean() = val;
         return *this;
@@ -365,42 +332,36 @@ class Value
 
     // Initializes an integer. Only conversions from signed types are provided. We
     // don't use `int64_t` here due to some nasty overloading rules.
-    Value(int val)
-      noexcept
+    Value(int val) noexcept
       {
         this->m_stor.emplace<V_integer>(val);
       }
 
-    Value(long val)
-      noexcept
+    Value(long val) noexcept
       {
         this->m_stor.emplace<V_integer>(val);
       }
 
-    Value(long long val)
-      noexcept
+    Value(long long val) noexcept
       {
         this->m_stor.emplace<V_integer>(val);
       }
 
     // Checks whether the stored value is an integer.
     bool
-    is_integer()
-      const noexcept
+    is_integer() const noexcept
       { return this->m_stor.index() == t_integer;  }
 
     // Gets an integer. If the stored value is not an integer, an exception is
     // thrown, and there is no effect.
     V_integer
-    as_integer()
-      const
+    as_integer() const
       { return this->m_stor.as<V_integer>();  }
 
     // Gets or creates an integer. If the stored value is not an integer value, it
     // is overwritten with zero, and a reference to the new value is returned.
     V_integer&
-    open_integer()
-      noexcept
+    open_integer() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_integer>())
           return *ptr;
@@ -411,46 +372,40 @@ class Value
     // Sets an integer. Only conversions from signed types are provided. We don't
     // use `int64_t` here due to some nasty overloading rules.
     Value&
-    operator=(int val)
-      & noexcept
+    operator=(int val) & noexcept
       {
         this->open_integer() = val;
         return *this;
       }
 
     Value&
-    operator=(long val)
-      & noexcept
+    operator=(long val) & noexcept
       {
         this->open_integer() = val;
         return *this;
       }
 
     Value&
-    operator=(long long val)
-      & noexcept
+    operator=(long long val) & noexcept
       {
         this->open_integer() = val;
         return *this;
       }
 
     // Initialize a floating-point number.
-    Value(float val)
-      noexcept
+    Value(float val) noexcept
       {
         this->m_stor.emplace<V_number>(val);
       }
 
-    Value(double val)
-      noexcept
+    Value(double val) noexcept
       {
         this->m_stor.emplace<V_number>(val);
       }
 
     // Checks whether the stored value is an integer or a floating-point number.
     bool
-    is_number()
-      const noexcept
+    is_number() const noexcept
       { return (this->m_stor.index() == t_integer) || (this->m_stor.index() == t_number);  }
 
     // Gets a floating-point number. If the stored value is an integer, it can be
@@ -458,8 +413,7 @@ class Value
     // loss. If the stored value is neither an integer nor a floating-point number,
     // an exception is thrown, and there is no effect.
     V_number
-    as_number()
-      const
+    as_number() const
       {
         if(auto psi = this->m_stor.ptr<V_integer>())
           return static_cast<V_number>(*psi);
@@ -473,8 +427,7 @@ class Value
     // number, it is overwritten with zero, and a reference to the new value is
     // returned.
     V_number&
-    open_number()
-      noexcept
+    open_number() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_number>())
           return *ptr;
@@ -486,16 +439,14 @@ class Value
 
     // Sets a floating-point number.
     Value&
-    operator=(float val)
-      & noexcept
+    operator=(float val) & noexcept
       {
         this->open_number() = static_cast<double>(val);
         return *this;
       }
 
     Value&
-    operator=(double val)
-      & noexcept
+    operator=(double val) & noexcept
       {
         this->open_number() = val;
         return *this;
@@ -503,56 +454,48 @@ class Value
 
     // Initialize a character string. The caller shall supply a valid UTF-8 string,
     // but actual validation is deferred to the `print()` function.
-    Value(const ::asteria::cow_string& val)
-      noexcept
+    Value(const ::asteria::cow_string& val) noexcept
       {
         this->m_stor.emplace<V_string>(val);
       }
 
-    Value(::asteria::shallow_string val)
-      noexcept
+    Value(::asteria::shallow_string val) noexcept
       {
         this->m_stor.emplace<V_string>(val);
       }
 
     template<typename ycharT, size_t N,
     ASTERIA_ENABLE_IF(::std::is_same<ycharT, char>::value)>
-    Value(const ycharT (*ps)[N])
-      noexcept
+    Value(const ycharT (*ps)[N]) noexcept
       {
         this->m_stor.emplace<V_string>(ps);
       }
 
     // Checks whether the stored value is a character string.
     bool
-    is_string()
-      const noexcept
+    is_string() const noexcept
       { return this->m_stor.index() == t_string;  }
 
     // Gets a character string. If the stored value is not a character string, an
     // exception is thrown, and there is no effect.
     const V_string&
-    as_string()
-      const
+    as_string() const
       { return this->m_stor.as<V_string>();  }
 
     // Get a read-only range of a character string.
     const char*
-    as_string_c_str()
-      const
+    as_string_c_str() const
       { return this->as_string().c_str();  }
 
     size_t
-    as_string_length()
-      const
+    as_string_length() const
       { return this->as_string().length();  }
 
     // Gets or creates a character string. If the stored value is not a character
     // string, it is overwritten with an empty string, and a reference to the new
     // value is returned.
     V_string&
-    open_string()
-      noexcept
+    open_string() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_string>())
           return *ptr;
@@ -562,27 +505,23 @@ class Value
 
     // Get a mutable range of a character string.
     char*
-    open_string_c_str()
-      noexcept
+    open_string_c_str() noexcept
       { return this->open_string().mut_data();  }
 
     size_t
-    open_string_length()
-      noexcept
+    open_string_length() noexcept
       { return this->open_string().length();  }
 
     // Set a character string.
     Value&
-    operator=(const ::asteria::cow_string& val)
-      & noexcept
+    operator=(const ::asteria::cow_string& val) & noexcept
       {
         this->open_string() = val;
         return *this;
       }
 
     Value&
-    operator=(::asteria::shallow_string val)
-      & noexcept
+    operator=(::asteria::shallow_string val) & noexcept
       {
         this->open_string() = val;
         return *this;
@@ -591,50 +530,43 @@ class Value
     template<typename ycharT, size_t N,
     ASTERIA_ENABLE_IF(::std::is_same<ycharT, char>::value)>
     Value&
-    operator=(const ycharT (*ps)[N])
-      & noexcept
+    operator=(const ycharT (*ps)[N]) & noexcept
       {
         this->open_string() = ps;
         return *this;
       }
 
     // Initialize a byte string.
-    Value(const ::asteria::cow_bstring& val)
-      noexcept
+    Value(const ::asteria::cow_bstring& val) noexcept
       {
         this->m_stor.emplace<V_binary>(val);
       }
 
     // Checks whether the stored value is a byte string.
     bool
-    is_binary()
-      const noexcept
+    is_binary() const noexcept
       { return this->m_stor.index() == t_binary;  }
 
     // Gets a byte string. If the stored value is not a byte string, an exception
     // is thrown, and there is no effect.
     const V_binary&
-    as_binary()
-      const
+    as_binary() const
       { return this->m_stor.as<V_binary>();  }
 
     // Get a read-only range of a byte string.
     const unsigned char*
-    as_binary_data()
-      const
+    as_binary_data() const
       { return this->as_binary().data();  }
 
     size_t
-    as_binary_size()
-      const
+    as_binary_size() const
       { return this->as_binary().size();  }
 
     // Gets or creates a byte string. If the stored value is not a byte string, it
     // is overwritten with an empty string, and a reference to the new value is
     // returned.
     V_binary&
-    open_binary()
-      noexcept
+    open_binary() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_binary>())
           return *ptr;
@@ -644,50 +576,43 @@ class Value
 
     // Get a mutable range of a byte string.
     unsigned char*
-    open_binary_data()
-      noexcept
+    open_binary_data() noexcept
       { return this->open_binary().mut_data();  }
 
     size_t
-    open_binary_size()
-      noexcept
+    open_binary_size() noexcept
       { return this->open_binary().length();  }
 
     // Set a byte string.
     Value&
-    operator=(const ::asteria::cow_bstring& val)
-      & noexcept
+    operator=(const ::asteria::cow_bstring& val) & noexcept
       {
         this->open_binary() = val;
         return *this;
       }
 
     // Initializes a timestamp.
-    Value(::std::chrono::system_clock::time_point val)
-      noexcept
+    Value(::std::chrono::system_clock::time_point val) noexcept
       {
         this->m_stor.emplace<V_time>(val);
       }
 
     // Checks whether the stored value is a timestamp.
     bool
-    is_time()
-      const noexcept
+    is_time() const noexcept
       { return this->m_stor.index() == t_time;  }
 
     // Gets a timestamp. If the stored value is not a timestamp, an exception is
     // thrown, and there is no effect.
     V_time
-    as_time()
-      const
+    as_time() const
       { return this->m_stor.as<V_time>();  }
 
     // Gets or creates a timestamp. If the stored value is not a timestamp, it
     // is overwritten with a zero timestamp denoting `1970-01-01T00:00:00Z`, and a
     // reference to the new value is returned.
     V_time&
-    open_time()
-      noexcept
+    open_time() noexcept
       {
         if(auto ptr = this->m_stor.mut_ptr<V_time>())
           return *ptr;
@@ -697,8 +622,7 @@ class Value
 
     // Sets a timestamp.
     Value&
-    operator=(::std::chrono::system_clock::time_point val)
-      & noexcept
+    operator=(::std::chrono::system_clock::time_point val) & noexcept
       {
         this->open_time() = val;
         return *this;
@@ -755,34 +679,27 @@ class Value
     // which should be configured with `setlocale()`. This function produces an ASCII
     // string.
     void
-    print_to(::asteria::tinyfmt& fmt, Options opts = options_default)
-      const;
+    print_to(::asteria::tinyfmt& fmt, Options opts = options_default) const;
 
     void
-    print_to(::asteria::cow_string& str, Options opts = options_default)
-      const;
+    print_to(::asteria::cow_string& str, Options opts = options_default) const;
 
     void
-    print_to(::asteria::linear_buffer& ln, Options opts = options_default)
-      const;
+    print_to(::asteria::linear_buffer& ln, Options opts = options_default) const;
 
     void
-    print_to(::std::FILE* fp, Options opts = options_default)
-      const;
+    print_to(::std::FILE* fp, Options opts = options_default) const;
 
     ::asteria::cow_string
-    to_string(Options opts = options_default)
-      const;
+    to_string(Options opts = options_default) const;
 
     void
-    print_to_stderr(Options opts = options_default)
-      const;
+    print_to_stderr(Options opts = options_default) const;
   };
 
 inline
 void
-swap(Value& lhs, Value& rhs)
-  noexcept
+swap(Value& lhs, Value& rhs) noexcept
   {
     lhs.swap(rhs);
   }
